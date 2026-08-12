@@ -106,6 +106,7 @@ UI_LINES = [
     ("ANY KEY TO CONTINUE", 1),
     ("P PAUSE  R RETRY  M MENU", 1),
     ("SMASH THROUGH", 1),
+    ("GET READY", 1),
     ("PAUSED", 2),
     ("P  RESUME", 1),
     ("W/S  ROW    A/D  CHANGE    SPACE  START", 1),
@@ -791,6 +792,49 @@ def test_the_dash_exit_needs_room_to_react():
     # the right edge, so a clearance past the canvas width degenerates into "the
     # screen is empty" and stops being a statement about reacting.
     assert main.DASH_EXIT_CLEARANCE * wd.SPEED_MAX <= wd.WIDTH
+
+
+def test_the_end_of_a_dash_says_so_in_more_than_one_way():
+    """Every other signal is a change in something, which is easy to miss.
+
+    The strobe stopping, the meter going, the speed dropping -- all of them are
+    differences, and a player who was not watching for one does not see it. The
+    empty screen and the words are states, there whether or not you caught the
+    moment they began.
+    """
+    assert main.DASH_RECOVERY > 0
+    assert main.DASH_OVER_PROMPT
+    # And the breather has to outlast the prompt telling you about it, or the
+    # words are gone before the quiet they explain.
+    assert main.DASH_RECOVERY * 60 > main.DASH_OVER_BLINK * 2, (
+        "the prompt cannot complete a blink"
+    )
+
+
+def test_dying_does_not_sound_like_a_dash_ending():
+    """`end_run` ends the dash, and you can never die during one.
+
+    So that call is always a no-op waiting to make noise: it played the
+    power-down over the death sound and armed a breather for a run that had
+    already finished.
+    """
+    import os
+    os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
+    import pygame
+    pygame.init()
+    pygame.display.set_mode((1, 1))
+    game = main.Game()
+    game.start_run()
+
+    played = []
+    real = sfx.play
+    sfx.play = played.append
+    try:
+        game.end_run()
+    finally:
+        sfx.play = real
+    assert "power_down" not in played, played
+    assert game.world.quiet == 0.0, "a finished run got a breather"
 
 
 def test_the_dash_is_never_the_colour_of_nightfall():

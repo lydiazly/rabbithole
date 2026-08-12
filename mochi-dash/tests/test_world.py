@@ -389,6 +389,71 @@ def test_a_launched_obstacle_stops_being_dangerous():
     assert ob.y < start_y, "should be flying"
 
 
+def test_a_hush_empties_the_screen_and_then_ends_with_an_obstacle():
+    """The one thing an ordinary gap can never do is leave the screen empty.
+
+    The spawner measures distance, so something is always already on its way in.
+    A hush is in seconds and permits nothing at all, which is what makes it
+    readable as "that is over" rather than as a slightly wide gap.
+    """
+    w = wd.World(scenes.DEFAULT, random.Random(7))
+    w.speed = wd.SPEED_MAX
+    for _ in range(600):  # fill the screen the ordinary way
+        w.update(DT, PLAYER_X)
+    assert w.obstacles, "nothing spawned to clear"
+
+    w.obstacles = []
+    w.hush(2.0)
+    t = 0.0
+    while w.quiet > 0.0:
+        w.update(DT, PLAYER_X)
+        t += DT
+        if w.quiet > 0.0:
+            assert not w.obstacles, f"spawned {t:.2f}s into a 2.0s hush"
+    assert abs(t - 2.0) < DT * 2, f"hush ran {t:.2f}s"
+    assert w.obstacles, "the hush ended without putting anything on screen"
+
+
+def test_a_hush_replaces_the_gap_rather_than_adding_to_it():
+    """Distance travelled during the hush must not also be spent afterwards.
+
+    Left accumulating, `since_spawn` would be far past `next_gap` when spawning
+    resumed and the obstacle after the breather would follow instantly.
+    """
+    w = wd.World(scenes.DEFAULT, random.Random(8))
+    w.speed = wd.SPEED_MAX
+    w.hush(2.0)
+    while w.quiet > 0.0:
+        w.update(DT, PLAYER_X)
+    assert w.since_spawn < w.next_gap, "the next gap was already spent"
+
+
+def test_thinner_traffic_is_asked_for_and_actually_delivered():
+    """Including at top speed, which is the only place it is ever asked for.
+
+    `min_gap` is a floor under the random gap, and a floor that ignored the
+    scale would swallow the request exactly where the gaps are tightest.
+    """
+    def gaps(scale):
+        w = wd.World(scenes.DEFAULT, random.Random(9))
+        w.speed = wd.SPEED_MAX
+        w.gap_scale = scale
+        seen, count = [], len(w.obstacles)
+        for _ in range(4000):
+            w.update(DT, PLAYER_X)
+            if len(w.obstacles) > count:
+                seen.append(w.next_gap)
+                count = len(w.obstacles)
+            w.obstacles = [o for o in w.obstacles if o.x > -100]
+            count = min(count, len(w.obstacles))
+        return seen
+
+    plain, thin = gaps(1.0), gaps(1.8)
+    assert plain and thin
+    assert min(thin) > min(plain), "the floor swallowed the request"
+    assert sum(thin) / len(thin) > sum(plain) / len(plain) * 1.5
+
+
 def test_a_smashed_obstacle_is_thrown_up_and_forward():
     """Up and to the right, at every speed the ramp can be at.
 

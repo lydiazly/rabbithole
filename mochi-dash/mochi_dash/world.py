@@ -230,7 +230,25 @@ class World:
         self.obstacles: list[Obstacle] = []
         self.since_spawn = 0.0
         self.next_gap = min_gap(SPEED_START) * 1.4
+        # Widens the spawn gap while something wants thinner traffic -- the tail
+        # of a dash, where whatever spawns now is what the player has to deal
+        # with unaided a second later.
+        self.gap_scale = 1.0
+        # Seconds of no spawning at all. Distinct from a wide gap because it is
+        # measured in time rather than distance and it permits an empty screen,
+        # which an ordinary gap never does.
+        self.quiet = 0.0
         self._build_scenery()
+
+    def hush(self, seconds: float) -> None:
+        """Stop spawning for a while, then spawn immediately.
+
+        The spawn at the end is the point of it rather than a detail: it makes
+        the pause a fixed length the player can learn, instead of a pause of
+        unpredictable length followed by an obstacle whenever the distance
+        counter happens to come round.
+        """
+        self.quiet = seconds
 
     @property
     def scroll(self) -> float:
@@ -316,19 +334,36 @@ class World:
             and -20 < ob.y + ob.h and ob.y < HEIGHT + 20
         ]
 
-        self.since_spawn += step
-        if self.since_spawn >= self.next_gap:
+        if self.quiet > 0.0:
+            # The hush replaces the gap rather than adding to it, so the run-up
+            # already travelled is not also spent once spawning resumes.
+            self.quiet = max(0.0, self.quiet - dt)
             self.since_spawn = 0.0
-            self._spawn()
-            self.next_gap = max(
-                min_gap(scroll), scroll * self.rng.uniform(*gap_range(self.speed))
-            )
+            if self.quiet == 0.0:
+                self._spawn()
+                self._pick_gap(scroll)
+        else:
+            self.since_spawn += step
+            if self.since_spawn >= self.next_gap:
+                self.since_spawn = 0.0
+                self._spawn()
+                self._pick_gap(scroll)
 
         self._scroll_layer(self.clouds, CLOUD_SPEED, dt, 14.0)
         self._scroll_layer(self.far, FAR_SPEED, dt, 42.0)
         self._scroll_layer(self.near, NEAR_SPEED, dt, 36.0)
         self._scroll_layer(self.speckles, 1.0, dt, 6.0)
         return cleared
+
+    def _pick_gap(self, scroll: float) -> None:
+        """Distance to leave before the next spawn.
+
+        The floor is scaled too. It exists so a jump can clear the gap, and a
+        request for thinner traffic that the floor could override would be no
+        request at all at top speed, which is exactly where it is asked for.
+        """
+        want = scroll * self.rng.uniform(*gap_range(self.speed)) * self.gap_scale
+        self.next_gap = max(min_gap(scroll) * self.gap_scale, want)
 
     def _spawn(self) -> None:
         x = WIDTH + 8.0

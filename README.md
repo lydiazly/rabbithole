@@ -64,4 +64,6 @@ as it goes. Scoring pays for what an obstacle asked of you: a point for a
 cactus and two for a tall one, two for a flyer low enough to duck, and nothing
 at all for one that sails past overhead. Every twenty points earns a **dash** —
 a few seconds of running much faster and flattening whatever is in the way
-instead of dying to it, with a blinking warning before it drops you back. Your best run is saved.
+instead of dying to it. It warns you before it goes, thins the traffic out as it
+does, and leaves you a clear screen for two seconds afterwards to find your
+footing again. Your best run is saved.

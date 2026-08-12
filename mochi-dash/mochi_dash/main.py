@@ -92,6 +92,21 @@ DASH_EXIT_CLEARANCE = world.JUMP_AIRTIME + DASH_EXIT_REACTION
 # matters, because the next obstacle stops being furniture.
 DASH_WARN_SECONDS = 1.5
 DASH_WARN_BLINK = 6
+# Traffic thins out over that last stretch. Whatever spawns during it is what the
+# player meets unaided a second later, so it is worth being generous exactly
+# here, and thinner traffic also means the exit check finds its clear screen
+# sooner rather than holding the dash open hunting for one.
+DASH_WARN_GAP_SCALE = 1.8
+
+# Then nothing at all for a moment. An ordinary gap can never leave the screen
+# empty -- the spawner measures distance, so something is always on its way in --
+# and an empty screen is the clearest possible statement that the dash is over
+# and the next thing is the player's problem. Two seconds until the next obstacle
+# appears at the right edge, and then the width of the canvas again before it
+# arrives, which is the breather the boost was borrowing against.
+DASH_RECOVERY = 2.0
+DASH_OVER_PROMPT = "GET READY"
+DASH_OVER_BLINK = 12
 
 # Telling the player what a dash is for. Two words, blinked over the sky for the
 # first stretch of it, then out of the way -- long enough to be read on the first
@@ -148,6 +163,7 @@ class Game:
         self.dash_left = 0.0
         self.dash_on = False
         self.dash_cooldown = 0.0
+        self.recovery = 0.0
         self.state = MENU
 
     # -- state transitions ------------------------------------------------
@@ -180,6 +196,7 @@ class Game:
         self.dash_left = 0.0
         self.dash_on = False
         self.dash_cooldown = 0.0
+        self.recovery = 0.0
 
     def start_run(self) -> None:
         self.go_to_title()
@@ -217,9 +234,17 @@ class Game:
         return self.dashing and self.dash_left < DASH_WARN_SECONDS
 
     def end_dash(self) -> None:
+        # Dying calls this, and dying while dashing is the one thing that cannot
+        # happen, so without the guard every death played the power-down over the
+        # death sound and armed a breather for a run that was already over.
+        if not self.dash_on:
+            return
         self.dash_left = 0.0
         self.dash_on = False
         self.world.boost = 1.0
+        self.world.gap_scale = 1.0
+        self.world.hush(DASH_RECOVERY)
+        self.recovery = DASH_RECOVERY
         sfx.play("power_down")
 
     def exit_is_clear(self) -> bool:
@@ -362,9 +387,11 @@ class Game:
 
         if self.dashing:
             self.dash_left = max(0.0, self.dash_left - dt)
+            self.world.gap_scale = DASH_WARN_GAP_SCALE if self.dash_ending else 1.0
             if self.dash_left <= 0.0 and self.exit_is_clear():
                 self.end_dash()
         else:
+            self.recovery = max(0.0, self.recovery - dt)
             self.dash_cooldown = max(0.0, self.dash_cooldown - dt)
             if self.toward_dash >= DASH_EVERY and self.dash_cooldown <= 0.0:
                 self.start_dash()
@@ -477,6 +504,14 @@ class Game:
                 lit = int(elapsed * 60) // DASH_PROMPT_BLINK % 2 == 0
                 if elapsed < DASH_PROMPT_SECONDS and lit:
                     self.text(DASH_PROMPT, 34, ink, halo)
+            elif self.recovery > 0.0:
+                # Said in words on an empty screen, because everything else
+                # about the ending was a change in something -- the strobe
+                # stopping, the meter going, the speed dropping -- and a player
+                # who was not watching for a change does not see one.
+                spent = DASH_RECOVERY - self.recovery
+                if int(spent * 60) // DASH_OVER_BLINK % 2 == 0:
+                    self.text(DASH_OVER_PROMPT, 34, ink, halo)
         elif self.state == TITLE:
             self.text(self.character.name, 20, ink, halo, 2)
             self.text("SPACE OR W - JUMP", 38, ink, halo)
