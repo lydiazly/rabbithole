@@ -658,3 +658,52 @@ def test_a_tone_fills_the_buffer_it_claims_to():
     44100 stereo: every sound came out a quarter of its intended length.
     """
     assert sfx.SAMPLE_RATE > 0 and sfx.CHANNELS == 1 and sfx.BITS == -16
+
+
+# -- one hitbox for everybody -----------------------------------------------
+
+
+def hitbox_air(character):
+    """(box cells, cells of the box that are empty art), over all poses."""
+    cells = empty = 0
+    for name, rows in character.poses.items():
+        w, h = sprites.POSE_SIZES[name]
+        for y in range(pl.HITBOX_INSET_Y, h):
+            for x in range(pl.HITBOX_INSET_X, w - pl.HITBOX_INSET_X):
+                cells += 1
+                empty += rows[y][x] == "."
+    return cells, empty
+
+
+def test_every_character_collides_through_the_identical_box():
+    """Whatever the face, the collision must feel the same.
+
+    The box comes from the shared size table rather than from anybody's art, so
+    this holds by construction -- it is here to keep holding, because a
+    per-character hitbox is the obvious thing to reach for when a new face does
+    not fill the old one.
+    """
+    boxes = {}
+    for character in characters.CHARACTERS:
+        player = pl.Player(0.0, GROUND)
+        shape = {}
+        for name in character.poses:
+            player.frame = name
+            shape[name] = player.hitbox()
+        boxes[character.key] = shape
+    first = next(iter(boxes.values()))
+    for key, shape in boxes.items():
+        assert shape == first, key
+
+
+@pytest.mark.parametrize("character", characters.CHARACTERS, ids=lambda c: c.key)
+def test_no_character_hides_much_air_inside_the_shared_box(character):
+    """Art that does not fill the box means dying to a pixel that is not there.
+
+    With one box for everybody, a character shaped unlike the others pays for
+    the uniformity in empty corners. Jojo is a triangle and sits highest at
+    around 10%; this bounds it so a future character cannot be quietly harder
+    to play than the rest.
+    """
+    cells, empty = hitbox_air(character)
+    assert empty / cells < 0.11, (character.key, empty, cells)

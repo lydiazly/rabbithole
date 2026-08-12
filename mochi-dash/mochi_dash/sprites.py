@@ -134,21 +134,25 @@ SLIME_POSES = {
 # -- the cat ---------------------------------------------------------------
 #
 # The same seven silhouettes at exactly the same sizes -- a character may not
-# change a hitbox -- but its own face and chin. Eyes sit lower than the slime's
-# and are two pixels tall rather than one, the mouth is an omega, and the bottom
-# row is inset so the chin reads round where the slime's is flat.
+# change a hitbox -- but its own face and chin.
+#
+# Built after the Stardew barn cat: a head that reaches full width a row sooner
+# so it reads chunky rather than domed, big two-by-two eyes set wide apart, and
+# a small muzzle -- a two-pixel nose over a two-pixel mouth -- where a wide
+# omega had been taking up half the face. The bottom row is inset so the chin
+# reads round, and it lines up exactly with the hitbox.
 
 CAT_ROUND = (
     "....@@@@@@....",
     "..@@oo####@@..",
     ".@o**o######@.",
-    ".@ooo#######@.",
     "@#ooo########@",
     "@#oo#########@",
-    "@#o#@####@###@",
-    "@###@####@###@",
+    "@#o##########@",
+    "@#o@@####@@##@",
+    "@##@@####@@##@",
     "@############@",
-    "@###@#@@#@###@",
+    "@#####@@#####@",
     "@####@##@####@",
     ".@@@@@@@@@@@@.",
 )
@@ -159,10 +163,10 @@ CAT_ROUND_B = (
     ".@o**o######@.",
     "@#ooo########@",
     "@#oo#########@",
-    "@#o#@####@###@",
-    "@###@####@###@",
+    "@#o@@####@@##@",
+    "@##@@####@@##@",
     "@############@",
-    "@###@#@@#@###@",
+    "@#####@@#####@",
     "@####@##@####@",
     ".@@@@@@@@@@@@.",
 )
@@ -175,10 +179,10 @@ CAT_STRETCH1 = (
     "@#ooo######@",
     "@#oo#######@",
     "@#o########@",
-    "@#o@####@##@",
-    "@##@####@##@",
+    "@#@@####@@#@",
+    "@#@@####@@#@",
     "@##########@",
-    "@##@#@@#@##@",
+    "@####@@####@",
     "@###@##@###@",
     "@##########@",
     ".@@@@@@@@@@.",
@@ -192,10 +196,10 @@ CAT_STRETCH2 = (
     "@#ooo####@",
     "@#oo#####@",
     "@#o######@",
-    "@#o@##@##@",
-    "@##@##@##@",
+    "@#@@##@@#@",
+    "@#@@##@@#@",
     "@########@",
-    "@#@#@@#@#@",
+    "@###@@###@",
     "@##@##@##@",
     "@########@",
     "@########@",
@@ -209,10 +213,10 @@ CAT_SQUASH1 = (
     "..@@oo######@@..",
     ".@o**o########@.",
     "@#ooo##########@",
-    "@#oo@######@###@",
-    "@#o#@######@###@",
+    "@#o@@######@@##@",
+    "@##@@######@@##@",
     "@##############@",
-    "@####@#@@#@####@",
+    "@######@@######@",
     "@#####@##@#####@",
     ".@@@@@@@@@@@@@@.",
 )
@@ -221,9 +225,9 @@ CAT_SQUASH2 = (
     "....@@@@@@@@@@....",
     "..@oo##########@..",
     ".@o**o##########@.",
-    "@#ooo@######@####@",
-    "@#o##@######@####@",
-    "@#####@#@@#@#####@",
+    "@#oo@@######@@###@",
+    "@#o#@@######@@###@",
+    "@#######@@#######@",
     "@######@##@######@",
     ".@@@@@@@@@@@@@@@@.",
 )
@@ -231,9 +235,9 @@ CAT_SQUASH2 = (
 CAT_SQUASH3 = (
     ".....@@@@@@@@@@.....",
     "..@o**o##########@..",
-    "@#ooo#@######@#####@",
-    "@#####@######@#####@",
-    "@######@#@@#@######@",
+    "@#oo#@@######@@####@",
+    "@#o##@@######@@####@",
+    "@########@@########@",
     ".@@@@@@@@@@@@@@@@@@.",
 )
 
@@ -582,23 +586,28 @@ FLYER_DOWN = (
 # Drawn *behind* the body, so only the part clearing the head shows and the base
 # never paints over the head's own outline. Authored as the left ear; the right
 # one is this mirrored.
+# Five rows rather than four, with a lit inner ear: Stardew's cats have big
+# ears, and the extra row all sits above the head where nothing collides.
 EAR_LEFT = (
     (  # upright
         "@...",
         "@@..",
         "@o@.",
+        "@oo@",
         "@@@@",
     ),
     (  # half down
         "....",
         "@@..",
         "@o@.",
+        "@oo@",
         "@@@@",
     ),
-    (  # flicked
+    (  # folded
         "....",
-        ".@..",
-        "@o@.",
+        "....",
+        "@@@.",
+        "@oo@",
         "@@@@",
     ),
 )
@@ -631,10 +640,8 @@ SHIBA_EAR_LEFT = (
     ),
 )
 
-EAR_W = 4
-EAR_H = 4
-# Rows of ear tucked behind the head, so it reads as attached rather than as a
-# hat balanced on top.
+# Rows of accessory tucked behind the head, so it reads as attached rather than
+# as a hat balanced on top.
 EAR_SINK = 1
 
 # -- the bird's crest ------------------------------------------------------
