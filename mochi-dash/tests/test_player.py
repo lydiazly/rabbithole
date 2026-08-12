@@ -708,3 +708,44 @@ def test_no_character_hides_much_air_inside_the_shared_box(character):
     """
     cells, empty = hitbox_air(character)
     assert empty / cells < 0.05, (character.key, empty, cells)
+
+
+def face_marks(rows):
+    """Outline pixels sitting inside the fill, i.e. eyes, noses and mouths.
+
+    An outline pixel is part of the silhouette when a neighbour is transparent
+    or when both neighbours are outline too, as along the crown and the base. A
+    face mark is one with fill beside it.
+    """
+    marks = set()
+    for y, row in enumerate(rows):
+        for x, char in enumerate(row):
+            if char != "@" or x == 0 or x == len(row) - 1:
+                continue
+            left, right = row[x - 1], row[x + 1]
+            if "." in (left, right):
+                continue
+            if left != "@" or right != "@":
+                marks.add((x, y))
+    return marks
+
+
+def test_ducking_shows_the_same_two_dashes_on_every_character():
+    """Flat out, everybody squints and nothing else shows.
+
+    A full face six pixels tall is noise, so the duck pose drops the mouth and
+    the nose and keeps two short dashes. Pinned as a shared face rather than
+    four coincidentally similar ones, so a fifth character cannot arrive
+    grinning while the rest squint.
+    """
+    faces = {c.key: face_marks(c.poses["squash3"]) for c in characters.CHARACTERS}
+    reference = faces[characters.DEFAULT.key]
+    assert len(reference) == 4, sorted(reference)
+    ys = {y for _, y in reference}
+    assert len(ys) == 1, "the dashes should share one row"
+    xs = sorted(x for x, _ in reference)
+    assert xs[1] == xs[0] + 1 and xs[3] == xs[2] + 1, "each eye is two pixels wide"
+    width = sprites.POSE_SIZES["squash3"][0]
+    assert xs[0] + xs[3] == width - 1, "the pair should be symmetric"
+    for key, marks in faces.items():
+        assert marks == reference, key

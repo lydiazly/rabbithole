@@ -111,12 +111,19 @@ SQUASH2 = (
     "@@@@@@@@@@@@@@@@@@",
 )
 
-# Also the held pose while ducking: the flattest pose there is.
+# The held pose while ducking, and the flattest there is.
+#
+# Every character wears the same face here: two short dashes for squeezed-shut
+# eyes and nothing else. A full face on something six pixels tall turns into
+# noise, and a flattened character reads better squinting than grinning.
+#
+# It doubles as the first frame of a hard landing, where the same squint reads as
+# taking the impact.
 SQUASH3 = (
     ".....@@@@@@@@@@.....",
     "..@o**o##########@..",
-    "@#ooo#@######@#####@",
-    "@########@@########@",
+    "@#ooo#@@####@@#####@",
+    "@##################@",
     "@##################@",
     "@@@@@@@@@@@@@@@@@@@@",
 )
@@ -241,8 +248,8 @@ CAT_SQUASH2 = (
 CAT_SQUASH3 = (
     ".....@@@@@@@@@@.....",
     "..@o**o##########@..",
-    "@#ooo#@######@#####@",
-    "@########@@########@",
+    "@#ooo#@@####@@#####@",
+    "@##################@",
     ".@################@.",
     "..@@@@@@@@@@@@@@@@..",
 )
@@ -363,9 +370,9 @@ BIRD_SQUASH2 = (
 
 BIRD_SQUASH3 = (
     ".....@@@@@@@@@@.....",
-    ".@*o###@####@#####@.",
-    "@#######@@@@#######@",
-    "@########@@########@",
+    ".@*o##############@.",
+    "@#####@@####@@#####@",
+    "@##################@",
     "@##################@",
     "@@@@@@@@@@@@@@@@@@@@",
 )
@@ -479,9 +486,9 @@ DOG_SQUASH2 = (
 DOG_SQUASH3 = (
     ".....@@@@@@@@@@.....",
     "..@o**o##########@..",
-    "@#ooo#@######@#####@",
+    "@#ooo#@@####@@#####@",
     "@%%%%%%%%%%%%%%%%%%@",
-    ".@%%%%%%@@@@%%%%%%@.",
+    ".@%%%%%%%%%%%%%%%%@.",
     "..@@@@@@@@@@@@@@@@..",
 )
 
