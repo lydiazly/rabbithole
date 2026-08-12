@@ -218,3 +218,10 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# ---------------------------------------------------------------------------
+# Slime Runner runtime state
+# ---------------------------------------------------------------------------
+
+# Written beside the package whenever a run beats the stored best.
+.highscore
