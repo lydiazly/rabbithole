@@ -103,6 +103,29 @@ def test_obstacle_sprites_fit_over_their_hitboxes():
         assert box[0] <= sw and box[1] <= sh
 
 
+def test_flyers_arrive_early_in_the_ramp_and_get_common_by_the_end():
+    """Pins the ducking mechanic to the speed ramp, not to absolute speeds.
+
+    The floor and span used to be absolute, so retuning the speed moved both the
+    first flyer and its eventual rate without anything failing.
+    """
+    assert wd.air_chance(wd.SPEED_START) == 0.0
+    quarter = wd.SPEED_START + 0.25 * wd.SPEED_RANGE
+    assert wd.air_chance(quarter) > 0.0, "ducking shows up too late in a run"
+    assert wd.air_chance(wd.SPEED_MAX) >= 0.7 * wd.AIR_CHANCE_MAX
+
+
+def test_air_chance_never_decreases_with_speed():
+    chances = [wd.air_chance(s) for s in range(int(wd.SPEED_START), int(wd.SPEED_MAX))]
+    assert chances == sorted(chances)
+
+
+def test_top_speed_still_leaves_time_to_react():
+    """Reaction window: an obstacle appearing at the right edge versus the slime."""
+    window = (wd.WIDTH - 42.0) / wd.SPEED_MAX
+    assert window > 1.1
+
+
 def test_no_flyers_before_the_speed_floor():
     w = RecordingWorld(random.Random(2))
     while w.speed < wd.AIR_SPEED_FLOOR:

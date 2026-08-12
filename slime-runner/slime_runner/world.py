@@ -22,9 +22,10 @@ WIDTH = 300
 HEIGHT = 108
 GROUND_Y = 84
 
-SPEED_START = 105.0
-SPEED_GAIN = 2.6
-SPEED_MAX = 255.0
+SPEED_START = 85.0
+SPEED_GAIN = 2.1
+SPEED_MAX = 205.0
+SPEED_RANGE = SPEED_MAX - SPEED_START
 
 SCORE_RATE = 0.18
 
@@ -35,9 +36,20 @@ JUMP_AIRTIME = 0.60
 GAP_MARGIN = 20.0
 GAP_RANGE = (0.75, 1.5)  # seconds of travel
 
-AIR_SPEED_FLOOR = 132.0  # no flyers until the run has some pace
-AIR_SPEED_SPAN = 165.0
+# Flyers are keyed to fractions of the speed ramp rather than to absolute speeds.
+# Pinned to absolute values, retuning the speed silently moves both when ducking
+# first appears and how common it ever gets — slowing the game down by a fifth
+# pushed the first flyer from ten seconds into twenty-two and halved its rate at
+# top speed, quietly sidelining the whole mechanic.
+AIR_SPEED_FLOOR = SPEED_START + 0.18 * SPEED_RANGE  # no flyers until some pace
+AIR_SPEED_SPAN = 1.10 * SPEED_RANGE
 AIR_CHANCE_MAX = 0.35
+
+
+def air_chance(speed: float) -> float:
+    """Probability that the next spawn is a flyer, at this speed."""
+    ramp = max(0.0, (speed - AIR_SPEED_FLOOR) / AIR_SPEED_SPAN)
+    return min(AIR_CHANCE_MAX, ramp * AIR_CHANCE_MAX)
 
 # Bottom edge above the ground. Low clears a ducked slime (6 tall) and catches a
 # standing one (12); high is only a threat mid-jump.
@@ -154,11 +166,7 @@ class World:
 
     def _spawn(self) -> None:
         x = WIDTH + 8.0
-        air_chance = min(
-            AIR_CHANCE_MAX,
-            max(0.0, (self.speed - AIR_SPEED_FLOOR) / AIR_SPEED_SPAN) * AIR_CHANCE_MAX,
-        )
-        if self.rng.random() < air_chance:
+        if self.rng.random() < air_chance(self.speed):
             clear = AIR_LOW_CLEAR if self.rng.random() < 0.6 else AIR_HIGH_CLEAR
             w, h = AIR_BOX
             self.obstacles.append(
