@@ -16,7 +16,7 @@ from pathlib import Path
 import pygame
 
 from . import characters, effects, pixelfont, scenes, sfx, world
-from .palette import step_at
+from .palette import STEPS, step_at
 from .player import HARD_LANDING, Player, idle_body_frame
 
 SCALE = 3
@@ -48,6 +48,28 @@ MENU_ROWS = (CHARACTER_ROW, SCENE_ROW, SOUND_ROW)
 SOUND_CHOICES = ("ON", "OFF")
 
 JUMP_BUFFER = 0.12  # a press just before landing still counts
+
+# The dash: a stretch of invincibility earned by clearing obstacles, during which
+# the world speeds up and anything in the way gets flattened instead of fatal.
+# Mario's starman, with the score standing in for the item box.
+#
+# Smashed obstacles count for score *and* toward the next dash, which on its own
+# would chain: a dash smashes enough to pay for the next one. The cooldown is
+# what stops that, measured from the end of the last dash, so two dashes are
+# always a real stretch of ordinary running apart.
+DASH_EVERY = 20  # points
+DASH_COOLDOWN = 12.0
+DASH_SECONDS = 5.0
+DASH_BOOST = 1.35
+DASH_SHIMMER_TICKS = 3  # frames per palette step, while dashing
+
+# The dash runs on a timer but must not end into a wall. Gaps spawned before it
+# started arrive in 0.52s once boosted, under the 0.60s a jump needs, which is
+# fine while invincible -- but nothing otherwise stops the clock running out with
+# an obstacle already a few pixels away. That is a death the reward caused and
+# the player could not have avoided, so the dash holds past zero, still smashing
+# and so still clearing the way, until there is room to react.
+DASH_EXIT_CLEARANCE = 0.40  # seconds of travel at the restored speed
 
 # After dying, the run ends by itself. The lockout is there because the key that
 # killed you is often still coming: without it the banner can be gone before it
@@ -97,6 +119,12 @@ class Game:
         self.highscore = load_highscore()
         self.over_timer = 0.0
         self.jump_buffer = 0.0
+        self.tick = 0
+        self.score = 0
+        self.toward_dash = 0
+        self.dash_left = 0.0
+        self.dash_on = False
+        self.dash_cooldown = 0.0
         self.state = MENU
 
     # -- state transitions ------------------------------------------------
@@ -123,6 +151,11 @@ class Game:
         self.player.reset()
         self.puffs.clear()
         self.jump_buffer = 0.0
+        self.score = 0
+        self.toward_dash = 0
+        self.dash_left = 0.0
+        self.dash_on = False
+        self.dash_cooldown = 0.0
 
     def start_run(self) -> None:
         self.go_to_title()
@@ -132,12 +165,43 @@ class Game:
         self.state = GAME_OVER
         self.over_timer = 0.0
         sfx.play("die")
+        self.end_dash()
         self.player.splat()
         self.puffs.burst(self.player.x, world.GROUND_Y, True)
-        score = int(self.world.score)
-        if score > self.highscore:
-            self.highscore = score
-            save_highscore(score)
+        if self.score > self.highscore:
+            self.highscore = self.score
+            save_highscore(self.score)
+
+    # -- the dash ---------------------------------------------------------
+
+    @property
+    def dashing(self) -> bool:
+        """Invincible. Tracked apart from the clock, which can run out while the
+        dash is still being held open for a clear exit."""
+        return self.dash_on
+
+    def start_dash(self) -> None:
+        self.dash_left = DASH_SECONDS
+        self.dash_on = True
+        self.dash_cooldown = DASH_COOLDOWN
+        self.toward_dash = 0
+        self.world.boost = DASH_BOOST
+        sfx.play("dash")
+
+    def end_dash(self) -> None:
+        self.dash_left = 0.0
+        self.dash_on = False
+        self.world.boost = 1.0
+
+    def exit_is_clear(self) -> bool:
+        """Whether there is room ahead to react once the boost drops."""
+        left, _, width, _ = self.player.hitbox()
+        front = left + width
+        reach = DASH_EXIT_CLEARANCE * self.world.speed
+        return not any(
+            not ob.launched and front < ob.x < front + reach
+            for ob in self.world.obstacles
+        )
 
     # -- loop -------------------------------------------------------------
 
@@ -246,14 +310,38 @@ class Game:
                 # second jump has been spent.
                 self.puffs.burst(self.player.x, self.player.y, False)
 
-        self.world.update(dt)
+        self.tick += 1
+        self.award(self.world.update(dt, self.player.x))
         impact = self.player.update(dt, holding_jump, ducking, lateral, X_MIN, X_MAX)
         if impact:
             self.puffs.burst(self.player.x, world.GROUND_Y, impact >= HARD_LANDING)
-        self.puffs.update(dt, self.world.speed)
+        self.puffs.update(dt, self.world.scroll)
 
-        if self.world.collides(self.player.hitbox()):
+        if self.dashing:
+            self.dash_left = max(0.0, self.dash_left - dt)
+            if self.dash_left <= 0.0 and self.exit_is_clear():
+                self.end_dash()
+        else:
+            self.dash_cooldown = max(0.0, self.dash_cooldown - dt)
+            if self.toward_dash >= DASH_EVERY and self.dash_cooldown <= 0.0:
+                self.start_dash()
+
+        struck = self.world.hits(self.player.hitbox())
+        if not struck:
+            return
+        if not self.dashing:
             self.end_run()
+            return
+        for ob in struck:
+            if not ob.scored:
+                self.award(world.points_for(ob))
+            self.world.launch(ob)
+            self.puffs.burst(ob.x + ob.w / 2, world.GROUND_Y, True)
+        sfx.play("smash")
+
+    def award(self, cleared: int) -> None:
+        self.score += cleared
+        self.toward_dash += cleared
 
     # -- drawing ----------------------------------------------------------
 
@@ -270,8 +358,14 @@ class Game:
             self.draw_menu(step, ink, halo)
         else:
             self.puffs.draw(self.canvas, scenery)
+            # Dashing shimmers the character by running its own day/night colours
+            # past far faster than the sky does -- Mario's starman palette flash,
+            # out of machinery that was already there.
+            look_step = step
+            if self.dashing:
+                look_step = (self.tick // DASH_SHIMMER_TICKS) % STEPS
             self.blit_character(
-                self.character, step, self.player.frame,
+                self.character, look_step, self.player.frame,
                 self.accessory_frame(self.character, self.player.accessory_ticks,
                                      self.player.idle),
                 self.player.blit_pos(),
@@ -307,13 +401,14 @@ class Game:
         pixelfont.draw(self.canvas, line, x, y, ink, scale)
 
     def draw_hud(self, ink, halo) -> None:
-        score = f"{int(self.world.score):05d}"
+        score = f"{self.score:04d}"
         if self.highscore:
-            score = f"HI {self.highscore:05d}  {score}"
+            score = f"HI {self.highscore:04d}  {score}"
         self.text(score, 6, ink, halo, x=world.WIDTH - pixelfont.text_width(score) - 6)
 
         if self.state == PLAYING:
             self.text("R RETRY  M MENU", 6, ink, halo, x=6)
+            self.draw_dash_meter(ink, halo)
         elif self.state == TITLE:
             self.text(self.character.name, 20, ink, halo, 2)
             self.text("SPACE OR W - JUMP", 38, ink, halo)
@@ -322,7 +417,7 @@ class Game:
             self.text("M - MENU   Q - QUIT", 65, ink, halo)
         elif self.state == GAME_OVER:
             self.text("GAME OVER", 30, ink, halo, 2)
-            self.text(f"SCORE {int(self.world.score):05d}", 50, ink, halo)
+            self.text(f"SCORE {self.score:04d}", 50, ink, halo)
             if self.over_timer >= GAME_OVER_LOCKOUT:
                 self.text("ANY KEY TO CONTINUE", 62, ink, halo)
 
@@ -333,6 +428,34 @@ class Game:
     MENU_VALUE_X = 158
     MENU_TOP = 40
     MENU_PITCH = 11
+
+    DASH_METER_W = 48
+
+    def draw_dash_meter(self, ink, halo) -> None:
+        """Either how much dash is left, or how much is owed before the next one.
+
+        One gauge for both, because they are the same question asked from either
+        side, and a second widget on a 300-pixel canvas is a widget too many.
+        """
+        if self.dashing:
+            label, filled = "DASH", self.dash_left / DASH_SECONDS
+        else:
+            label = ""
+            owed = min(1.0, self.toward_dash / DASH_EVERY)
+            waited = 1.0 if DASH_COOLDOWN <= 0 else min(
+                1.0, 1.0 - self.dash_cooldown / DASH_COOLDOWN
+            )
+            filled = min(owed, waited)
+        x = (world.WIDTH - self.DASH_METER_W) // 2
+        if label:
+            self.text(label, 6, ink, halo,
+                      x=(world.WIDTH - pixelfont.text_width(label)) // 2)
+        y = 13 if label else 7
+        self.canvas.fill(halo, (x, y + 1, self.DASH_METER_W, 2))
+        self.canvas.fill(ink, (x, y, self.DASH_METER_W, 1))
+        width = round(self.DASH_METER_W * max(0.0, min(1.0, filled)))
+        if width:
+            self.canvas.fill(ink, (x, y, width, 2))
 
     def draw_menu(self, step, ink, halo) -> None:
         self.text("MOCHI DASH", 16, ink, halo, 2)

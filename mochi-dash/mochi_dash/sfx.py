@@ -24,7 +24,7 @@ BUFFER = 512
 
 # The sounds this module knows how to make. Named up front so a call site
 # can be checked against it without an audio device present.
-BUILT = ("jump", "double_jump", "die", "blip")
+BUILT = ("jump", "double_jump", "dash", "smash", "die", "blip")
 
 _sounds: dict[str, pygame.mixer.Sound] = {}
 _ready = False
@@ -69,6 +69,12 @@ def init() -> None:
         # second jump so the two are distinguishable without looking.
         jump=_tone(430, 700, 90),
         double_jump=_tone(700, 980, 70, volume=0.24),
+        # Earning a dash: the one unambiguously good news in the game, so it
+        # sweeps a long way up.
+        dash=_tone(330, 1250, 260, volume=0.28, duty=0.25),
+        # Flattening something. Short, low and a narrow duty, which is as close
+        # to a crunch as a square wave gets.
+        smash=_tone(760, 190, 90, volume=0.30, duty=0.12),
         # Falling and longer: the only sound that is bad news.
         die=_tone(420, 110, 380, volume=0.34),
         # Menu movement, kept quiet enough to hold a key down against.

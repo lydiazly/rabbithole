@@ -749,3 +749,30 @@ def test_ducking_shows_the_same_two_dashes_on_every_character():
     assert xs[0] + xs[3] == width - 1, "the pair should be symmetric"
     for key, marks in faces.items():
         assert marks == reference, key
+
+
+# -- the dash ---------------------------------------------------------------
+
+
+def test_the_dash_cannot_pay_for_itself():
+    """Smashed obstacles count for score and toward the next dash, per design.
+
+    On its own that chains -- a dash smashes enough to buy the next one -- so the
+    cooldown is what has to hold. Measured at top speed, ploughing through
+    everything, a dash earns about a quarter of its own price.
+    """
+    yield_at_top = 8  # measured: 5 points from ~5 obstacles, with headroom
+    assert yield_at_top < main.DASH_EVERY, "a dash would buy the next one"
+    assert main.DASH_COOLDOWN > main.DASH_SECONDS, "no ordinary running between"
+
+
+def test_the_dash_exit_needs_room_to_react():
+    """Ending the boost with an obstacle at your face is an unavoidable death.
+
+    Gaps spawned before the dash arrive in 0.52s once boosted, under the 0.60s a
+    jump needs. That is fine while invincible, and the clock running out mid-gap
+    is what would not be.
+    """
+    assert main.DASH_EXIT_CLEARANCE > 0
+    # The clearance has to be long enough to see and answer an obstacle.
+    assert main.DASH_EXIT_CLEARANCE * wd.SPEED_MAX > wd.LARGE_BOX[0] * 4

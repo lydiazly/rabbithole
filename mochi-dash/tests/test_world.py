@@ -10,6 +10,7 @@ from mochi_dash import world as wd
 
 DT = 1.0 / 60.0
 FIVE_MINUTES = int(300 / DT)
+PLAYER_X = 42.0  # where main.py stands the runner
 
 
 class RecordingWorld(wd.World):
@@ -21,7 +22,7 @@ class RecordingWorld(wd.World):
 
     def _spawn(self):
         super()._spawn()
-        self.spawns.append((self.distance, self.speed))
+        self.spawns.append((self.distance, self.speed, self.scroll))
 
 
 def settled(ducking: bool = False) -> pl.Player:
@@ -49,9 +50,9 @@ def test_gap_constant_is_not_optimistic():
 def test_spawn_gaps_always_leave_room_to_land_and_jump_again():
     w = RecordingWorld(scenes.DEFAULT, random.Random(1))
     for _ in range(FIVE_MINUTES):
-        w.update(DT)
+        w.update(DT, PLAYER_X)
     assert len(w.spawns) > 100
-    for (d0, _), (d1, speed_end) in zip(w.spawns, w.spawns[1:]):
+    for (d0, *_), (d1, speed_end, _) in zip(w.spawns, w.spawns[1:]):
         # Speed at the *end* of the gap is the harshest reading: the world sped
         # up while the player was crossing it.
         assert (d1 - d0) / speed_end >= wd.JUMP_AIRTIME
@@ -158,7 +159,7 @@ def test_no_flyers_before_they_unlock():
     w = RecordingWorld(scenes.DEFAULT, random.Random(2))
     floor = speed_at(wd.AIR_FROM)
     while w.speed < floor:
-        w.update(DT)
+        w.update(DT, PLAYER_X)
         assert not any(ob.kind == "flyer" for ob in w.obstacles)
 
 
@@ -167,7 +168,7 @@ def test_the_opening_of_a_real_run_spawns_only_small_cacti():
     w = wd.World(scenes.DEFAULT, random.Random(11))
     unlock_speed = speed_at(min(wd.LARGE_FROM, wd.AIR_FROM))
     while w.speed < unlock_speed:
-        w.update(DT)
+        w.update(DT, PLAYER_X)
         assert all(ob.kind == "small" for ob in w.obstacles), [
             ob.kind for ob in w.obstacles
         ]
@@ -182,7 +183,7 @@ def test_stars_hold_still_while_the_clouds_drift():
     w = wd.World(scenes.DEFAULT, random.Random(5))
     stars, clouds = list(w.stars), [c[0] for c in w.clouds]
     for _ in range(FIVE_MINUTES):
-        w.update(DT)
+        w.update(DT, PLAYER_X)
     assert w.stars == stars
     # Vacuous otherwise: a world that scrolled nothing would also pass.
     assert [c[0] for c in w.clouds] != clouds
@@ -191,7 +192,7 @@ def test_stars_hold_still_while_the_clouds_drift():
 def test_obstacles_are_retired_once_offscreen():
     w = wd.World(scenes.DEFAULT, random.Random(3))
     for _ in range(FIVE_MINUTES):
-        w.update(DT)
+        w.update(DT, PLAYER_X)
         assert all(ob.x + ob.w > -16.0 for ob in w.obstacles)
     assert len(w.obstacles) < 12
 
@@ -199,7 +200,7 @@ def test_obstacles_are_retired_once_offscreen():
 def test_speed_and_day_phase_stay_in_range():
     w = wd.World(scenes.DEFAULT, random.Random(4))
     for _ in range(FIVE_MINUTES):
-        w.update(DT)
+        w.update(DT, PLAYER_X)
         assert wd.SPEED_START <= w.speed <= wd.SPEED_MAX
         assert 0.0 <= w.phase < 1.0
     assert w.speed == wd.SPEED_MAX
@@ -260,7 +261,7 @@ def test_a_scene_can_switch_a_layer_off():
     w = wd.World(scenes.SNOW, random.Random(9))
     assert w.clouds == []
     for _ in range(600):
-        w.update(DT)
+        w.update(DT, PLAYER_X)
     assert w.clouds == []
     # And the layers it does keep are still populated.
     assert w.stars and w.near and w.speckles
@@ -280,3 +281,74 @@ def test_switching_scene_rebuilds_the_scenery():
     assert w.clouds == []
     w.use_scene(scenes.DESERT)
     assert w.clouds
+
+
+# -- scoring and the dash ---------------------------------------------------
+
+
+def test_points_grow_with_obstacle_height():
+    """Height stands in for how much of a jump a thing demands."""
+    small = wd.Obstacle(0, 0, *wd.SMALL_BOX, "small")
+    large = wd.Obstacle(0, 0, *wd.LARGE_BOX, "large")
+    flyer = wd.Obstacle(0, 0, *wd.AIR_BOX, "flyer")
+    assert wd.points_for(large) > wd.points_for(small)
+    assert wd.points_for(small) >= 1 and wd.points_for(flyer) >= 1
+
+
+def test_an_obstacle_scores_once_however_the_player_moves():
+    """A and D shift where you stand, so a cleared cactus must not re-score."""
+    w = wd.World(scenes.DEFAULT, random.Random(3))
+    ob = wd.Obstacle(PLAYER_X - 8, wd.GROUND_Y - 11, *wd.SMALL_BOX, "small")
+    w.obstacles = [ob]
+    expected = wd.points_for(ob)
+    first = w.update(DT, PLAYER_X)
+    assert first == expected, (first, expected)
+    total = first
+    for _ in range(30):
+        total += w.update(DT, PLAYER_X - 40)  # shuffle back over it
+    assert total == expected, "scored more than once"
+
+
+def test_the_spawn_floor_holds_at_the_boosted_speed():
+    """The dash speeds the world up, and the gap guarantee is keyed to speed.
+
+    Were the floor computed from the un-boosted ramp speed, gaps spawned during
+    a dash would arrive faster than they were spaced for, and the moment the
+    dash ended the player would inherit one that could not be jumped.
+    """
+    w = RecordingWorld(scenes.DEFAULT, random.Random(4))
+    w.boost = 1.35
+    for _ in range(FIVE_MINUTES):
+        w.update(DT, PLAYER_X)
+    assert len(w.spawns) > 100
+    for (d0, *_), (d1, _, scroll_end) in zip(w.spawns, w.spawns[1:]):
+        assert (d1 - d0) / scroll_end >= wd.JUMP_AIRTIME
+
+
+def test_obstacles_get_denser_as_the_run_speeds_up():
+    """A gap measured in seconds keeps the density flat however fast it goes.
+
+    That is what it used to do: 1.14s between obstacles at the opening crawl and
+    1.13s at top speed, so all the late difficulty came from the reaction window
+    and none from the spacing.
+    """
+    early = wd.gap_range(wd.SPEED_START)
+    late = wd.gap_range(wd.SPEED_MAX)
+    assert late[0] < early[0] and late[1] < early[1]
+    # Still never below what a jump needs.
+    assert late[0] >= wd.JUMP_AIRTIME
+
+
+def test_a_launched_obstacle_stops_being_dangerous():
+    w = wd.World(scenes.DEFAULT, random.Random(5))
+    ob = wd.Obstacle(PLAYER_X, wd.GROUND_Y - 11, *wd.SMALL_BOX, "small")
+    w.obstacles = [ob]
+    box = (PLAYER_X, wd.GROUND_Y - 12, 12, 11)
+    assert w.hits(box), "should be a hit before it is launched"
+    w.launch(ob)
+    assert not w.hits(box)
+    assert w.collides(box) is False
+    start_y = ob.y
+    for _ in range(20):
+        w.update(DT, PLAYER_X)
+    assert ob.y < start_y, "should be flying"

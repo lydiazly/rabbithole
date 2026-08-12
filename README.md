@@ -34,4 +34,7 @@ further back buying reaction time. `M` reopens the menu, which also switches
 the sound off.
 
 It opens easy — nothing but single cacti while you find the jump — and adds
-taller ones, clusters and flyers as it speeds up. Your best run is saved.
+taller ones, clusters and flyers as it speeds up, spacing them a little tighter
+as it goes. A point per obstacle cleared, more for the tall ones, and every
+twenty points earns a **dash**: a few seconds of running faster and flattening
+anything in the way instead of dying to it. Your best run is saved.
