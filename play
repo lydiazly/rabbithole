@@ -1,0 +1,138 @@
+#!/usr/bin/env bash
+#
+# Launcher for the games in this repo.
+#
+# Every game is a self-contained uv project in its own subdirectory, so this
+# discovers them rather than listing them: drop in a new subdirectory with a
+# pyproject.toml and it shows up here with no edit.
+
+set -euo pipefail
+
+cd "$(dirname "${BASH_SOURCE[0]}")"
+
+self=$(basename "$0")
+
+die() {
+    printf '%s\n' "$*" >&2
+    exit 1
+}
+
+command -v uv >/dev/null ||
+    die "uv is not installed -- see https://docs.astral.sh/uv/getting-started/installation/"
+
+# A game is any subdirectory holding a pyproject.toml.
+games=()
+for manifest in */pyproject.toml; do
+    [[ -e $manifest ]] || continue # no matches: the glob stayed literal
+    games+=("${manifest%/pyproject.toml}")
+done
+((${#games[@]})) || die "No games here: no subdirectory has a pyproject.toml."
+
+# The one-line summary each project already declares, for the menu.
+description() {
+    awk '
+        /^\[project\]/ { in_project = 1; next }
+        /^\[/          { in_project = 0 }
+        in_project && /^description[[:space:]]*=/ {
+            sub(/^description[[:space:]]*=[[:space:]]*/, "")
+            gsub(/^"|"$/, "")
+            print
+            exit
+        }
+    ' "$1/pyproject.toml"
+}
+
+# What to hand `uv run`. A project that declares a console script names its own
+# entry point; the rest are single-file games, where the one top-level module is
+# the game. Anything else is ambiguous and says so rather than guessing.
+entry_point() {
+    local dir=$1 script modules
+
+    script=$(awk '
+        /^\[project\.scripts\]/ { in_scripts = 1; next }
+        /^\[/                   { in_scripts = 0 }
+        in_scripts && /=/ {
+            sub(/[[:space:]]*=.*/, "")
+            gsub(/["[:space:]]/, "")
+            print
+            exit
+        }
+    ' "$dir/pyproject.toml")
+
+    if [[ -n $script ]]; then
+        printf '%s' "$script"
+        return 0
+    fi
+
+    modules=("$dir"/*.py)
+    [[ -e ${modules[0]} ]] || return 1
+    ((${#modules[@]} == 1)) || return 1
+    basename "${modules[0]}"
+}
+
+launch() {
+    local dir=$1 entry
+    entry=$(entry_point "$dir") || die \
+        "Don't know how to start '$dir': it declares no [project.scripts] and has no single top-level .py file."
+    printf '\n  starting %s\n\n' "$dir"
+    cd "$dir"
+    # exec so the game owns the terminal, and its exit code becomes ours.
+    exec uv run "$entry"
+}
+
+usage() {
+    printf 'usage: %s [game]\n\nGames:\n' "$self"
+    local game
+    for game in "${games[@]}"; do
+        printf '  %-14s %s\n' "$game" "$(description "$game")"
+    done
+}
+
+if (($# > 1)); then
+    usage >&2
+    exit 2
+fi
+
+if (($# == 1)); then
+    case $1 in
+        -h | --help | -l | --list)
+            usage
+            exit 0
+            ;;
+    esac
+    for game in "${games[@]}"; do
+        if [[ $game == "$1" ]]; then
+            launch "$game"
+        fi
+    done
+    printf "No such game: '%s'\n\n" "$1" >&2
+    usage >&2
+    exit 1
+fi
+
+# No argument: pick one interactively.
+[[ -t 0 ]] || die "Not a terminal -- name the game instead, e.g. $self ${games[0]}"
+
+printf '\n  rabbithole\n\n'
+for i in "${!games[@]}"; do
+    printf '  %d) %-14s %s\n' "$((i + 1))" "${games[i]}" "$(description "${games[i]}")"
+done
+printf '  q) quit\n\n'
+
+read -rp '  pick: ' choice
+
+case $choice in
+    q | Q | '') exit 0 ;;
+esac
+
+# Accept either the menu number or the name.
+if [[ $choice =~ ^[0-9]+$ ]] && ((choice >= 1 && choice <= ${#games[@]})); then
+    launch "${games[choice - 1]}"
+fi
+for game in "${games[@]}"; do
+    if [[ $game == "$choice" ]]; then
+        launch "$game"
+    fi
+done
+
+die "Not one of the choices: '$choice'"
