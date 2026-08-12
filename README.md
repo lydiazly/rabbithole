@@ -22,6 +22,19 @@ launch = "windowed"
 The default is the terminal, which is the screen for the curses games: they hold
 it until they exit, because detaching one from its tty kills it.
 
+## Playing without a checkout
+
+The terminal games are pure standard library, so there is nothing to install:
+
+```sh
+uvx --from "git+https://github.com/lydiazly/rabbithole#subdirectory=snake" snake
+```
+
+Mochi Dash plays in a browser at <https://lydiazly.github.io/rabbithole/>, built
+by `.github/workflows/pages.yml` on every push to `main` (Pages source: GitHub
+Actions). It carries no assets, so the download is small; the CPython and pygame
+runtime comes from the pygame-web CDN at load time.
+
 ## snake
 
 Terminal. Steer with the arrow keys or `WASD`, eat the food to grow. Hitting a

@@ -1,0 +1,68 @@
+# Publishes the web build of Mochi Dash to GitHub Pages.
+#
+# Only the windowed games can go to the web at all: Snake and Breakout are curses
+# programs, and a browser has no terminal to give them. So this builds the one
+# game rather than discovering them the way ../../play does.
+name: pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: # for republishing without a commit
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Let a running deploy finish rather than cancelling it: half-published is worse
+# than a minute out of date.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+
+      # The game is published, so it gets the same gate as any release: if the
+      # suite is red, nothing goes out.
+      - name: Test
+        run: uv run --directory mochi-dash python -m pytest -q
+
+      # pygbag packages the whole app directory, and players have no use for the
+      # tests or the manifest. Staging keeps the download to the game itself.
+      - name: Stage the app
+        run: |
+          mkdir -p stage/mochi-dash
+          cp -r mochi-dash/main.py mochi-dash/mochi_dash stage/mochi-dash/
+
+      # 900x324 is the game's own window: world.WIDTH x world.HEIGHT at SCALE 3.
+      # Pinned, because the build embeds a runtime version and a silent bump to
+      # either side is a silent change to what players get.
+      - name: Build for the web
+        run: |
+          uvx pygbag@0.9.3 --build \
+            --app_name mochi-dash \
+            --title "Mochi Dash" \
+            --width 900 --height 324 \
+            stage/mochi-dash
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: stage/mochi-dash/build/web
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4

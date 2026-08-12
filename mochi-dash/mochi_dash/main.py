@@ -9,13 +9,13 @@ screen, run, die, and land back on that character's title screen ready to go
 again. Getting back into a run is one key from anywhere.
 """
 
+import asyncio
 import random
 import sys
-from pathlib import Path
 
 import pygame
 
-from . import characters, effects, pixelfont, scenes, sfx, world
+from . import characters, effects, pixelfont, scenes, sfx, storage, world
 from .palette import STEPS, step_at
 from .player import HARD_LANDING, Player, idle_body_frame
 
@@ -104,24 +104,10 @@ DASH_STREAK_LEN = 11
 GAME_OVER_LOCKOUT = 0.5
 GAME_OVER_HOLD = 3.5
 
-HIGHSCORE_PATH = Path(__file__).resolve().parent.parent / ".highscore"
-
 MENU = "menu"
 TITLE = "title"
 PLAYING = "playing"
 GAME_OVER = "over"
-
-
-def load_highscore() -> int:
-    """Read the stored high score. A missing or corrupt file just means zero."""
-    try:
-        return int(HIGHSCORE_PATH.read_text().strip())
-    except (FileNotFoundError, ValueError):
-        return 0
-
-
-def save_highscore(score: int) -> None:
-    HIGHSCORE_PATH.write_text(f"{score}\n")
 
 
 class Game:
@@ -143,7 +129,7 @@ class Game:
         self.picks = {CHARACTER_ROW: 0, SCENE_ROW: 0, SOUND_ROW: 0}
         self.row = CHARACTER_ROW
         self.preview_tick = 0
-        self.highscore = load_highscore()
+        self.highscore = storage.load()
         self.over_timer = 0.0
         self.jump_buffer = 0.0
         self.tick = 0
@@ -199,7 +185,7 @@ class Game:
         self.puffs.burst(self.player.x, world.GROUND_Y, True)
         if self.score > self.highscore:
             self.highscore = self.score
-            save_highscore(self.score)
+            storage.save(self.score)
 
     # -- the dash ---------------------------------------------------------
 
@@ -239,7 +225,14 @@ class Game:
 
     # -- loop -------------------------------------------------------------
 
-    def run(self) -> None:
+    async def run(self) -> None:
+        """The loop.
+
+        Async only because that is how a browser lets go: pygbag runs this same
+        loop on the page's event loop, and without a yield inside it the tab
+        would freeze rather than draw. On a desktop the await costs a trip
+        through an event loop that has nothing else to do.
+        """
         accumulator = 0.0
         while True:
             if not self.handle_events():
@@ -249,6 +242,7 @@ class Game:
                 self.update(DT)
                 accumulator -= DT
             self.draw()
+            await asyncio.sleep(0)
 
     def handle_events(self) -> bool:
         for event in pygame.event.get():
@@ -555,7 +549,12 @@ class Game:
             self.canvas.fill(ink, (x, y + row, width, 1))
 
 
-def main() -> None:
+async def play() -> None:
+    """Set up and run to the end. The web build awaits this directly.
+
+    Kept apart from main() because pygbag needs an awaitable to hand to the
+    page's event loop, while a console script needs something it can just call.
+    """
     sfx.prepare()  # before pygame.init(), or the device is opened twice
     pygame.init()
     sfx.init()
@@ -569,9 +568,14 @@ def main() -> None:
             "it locally."
         ) from exc
     try:
-        game.run()
+        await game.run()
     finally:
         pygame.quit()
+
+
+def main() -> None:
+    """The [project.scripts] entry point, for playing on a desktop."""
+    asyncio.run(play())
 
 
 if __name__ == "__main__":

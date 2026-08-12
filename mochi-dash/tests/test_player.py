@@ -2,7 +2,7 @@
 
 import pytest
 
-from mochi_dash import characters, main, pixelfont, scenes, sfx, sprites
+from mochi_dash import characters, main, pixelfont, scenes, sfx, sprites, storage
 from mochi_dash import player as pl
 from mochi_dash import world as wd
 from mochi_dash.palette import STEPS, is_night, luminance, step_at
@@ -789,7 +789,7 @@ def test_the_dash_exit_needs_room_to_react():
     assert main.DASH_EXIT_REACTION > 0
 
 
-def test_pausing_freezes_the_run_and_only_the_run():
+def test_pausing_freezes_the_run_and_only_the_run(monkeypatch):
     """A pause has to stop the clock as well as the world.
 
     The dash timer and the cooldown both run off the same update, so a pause
@@ -801,8 +801,12 @@ def test_pausing_freezes_the_run_and_only_the_run():
     import pygame
 
     pygame.init()
+    # This is the only test that drives a whole Game, so it is the only one that
+    # could end a run and write a real score over the player's own. Patching the
+    # module function is the point: assigning to the instance, as this once did,
+    # set an attribute nobody reads.
+    monkeypatch.setattr(storage, "save", lambda score: None)
     game = main.Game()
-    game.HIGHSCORE_PATH = None
     game.start_run()
     game.start_dash()
     for _ in range(30):
