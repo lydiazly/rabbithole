@@ -698,12 +698,13 @@ def test_every_character_collides_through_the_identical_box():
 
 @pytest.mark.parametrize("character", characters.CHARACTERS, ids=lambda c: c.key)
 def test_no_character_hides_much_air_inside_the_shared_box(character):
-    """Art that does not fill the box means dying to a pixel that is not there.
+    """Art that does not fill the box means dying beside the character.
 
-    With one box for everybody, a character shaped unlike the others pays for
-    the uniformity in empty corners. Jojo is a triangle and sits highest at
-    around 10%; this bounds it so a future character cannot be quietly harder
-    to play than the rest.
+    It costs no difficulty -- the box is identical whatever the art does -- but
+    it makes a fair death look unfair, which is worse to play than to read
+    about. Jojo's sloping shoulders once left 10% of the box empty and now leave
+    3%, so the whole cast sits under 4% and the bound is set where it actually
+    bites rather than where today's worst case happens to be.
     """
     cells, empty = hitbox_air(character)
-    assert empty / cells < 0.11, (character.key, empty, cells)
+    assert empty / cells < 0.05, (character.key, empty, cells)

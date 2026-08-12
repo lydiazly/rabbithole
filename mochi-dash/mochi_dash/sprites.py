@@ -253,20 +253,28 @@ CAT_POSES = {
 
 # -- the bird --------------------------------------------------------------
 #
-# A rice ball rather than a dome: narrow at the crown and widening all the way
-# down to a flat base. Eyes sit a row lower than the slime's but stay one pixel,
-# and the beak is a two-row wedge. Same seven sizes as everybody else.
+# A rice ball rather than a dome: narrow at the crown and widening to a flat
+# base. Eyes sit a row lower than the slime's but stay one pixel, and the beak is
+# a two-row wedge. Same seven sizes as everybody else.
+#
+# The shoulders reach full width early on purpose. The hitbox is one rectangle
+# shared by every character, so a sloping shape leaves air inside it -- which
+# costs nothing in difficulty, since the box is identical either way, but makes
+# a death look like it happened beside the bird rather than to it. Filling the
+# middle and lower rows took that from 10% of the box down to 3%. The top row or
+# two stay narrow: air up there is what keeps the rice ball a rice ball, and
+# nothing about the collision changes.
 
 BIRD_ROUND = (
     ".....@@@@.....",
-    "....@o###@....",
-    "...@*o####@...",
-    "...@oo####@...",
-    "..@o#######@..",
-    "..@o#######@..",
-    ".@o#@####@##@.",
-    ".@o#########@.",
-    ".@o##@@@@###@.",
+    "...@o#####@...",
+    "..@*o######@..",
+    ".@ooo#######@.",
+    ".@oo########@.",
+    "@#oo#########@",
+    "@#o#@####@###@",
+    "@############@",
+    "@####@@@@####@",
     "@#####@@#####@",
     "@############@",
     "@@@@@@@@@@@@@@",
@@ -274,13 +282,13 @@ BIRD_ROUND = (
 
 BIRD_ROUND_B = (
     ".....@@@@.....",
-    "....@o###@....",
-    "...@*o####@...",
-    "..@o#######@..",
-    "..@o#######@..",
-    ".@o#@####@##@.",
-    ".@o#########@.",
-    ".@o##@@@@###@.",
+    "...@o#####@...",
+    "..@*o######@..",
+    ".@ooo#######@.",
+    "@#oo#########@",
+    "@#o#@####@###@",
+    "@############@",
+    "@####@@@@####@",
     "@#####@@#####@",
     "@############@",
     "@@@@@@@@@@@@@@",
@@ -288,16 +296,16 @@ BIRD_ROUND_B = (
 
 BIRD_STRETCH1 = (
     "....@@@@....",
-    "....@o#@....",
-    "...@*o##@...",
-    "...@oo##@...",
-    "...@oo##@...",
-    "..@o#####@..",
-    "..@o@##@#@..",
-    "..@o#####@..",
+    "...@o###@...",
+    "..@*o####@..",
+    "..@oo####@..",
+    ".@ooo#####@.",
+    ".@oo######@.",
+    ".@o@####@#@.",
     ".@o#######@.",
-    ".@o#@@@@##@.",
-    ".@o##@@###@.",
+    ".@########@.",
+    "@###@@@@###@",
+    "@####@@####@",
     "@##########@",
     "@##########@",
     "@@@@@@@@@@@@",
@@ -305,11 +313,11 @@ BIRD_STRETCH1 = (
 
 BIRD_STRETCH2 = (
     "...@@@@...",
-    "...@o#@...",
-    "...@o#@...",
-    "..@*o##@..",
-    "..@oo##@..",
-    "..@oo##@..",
+    "..@o###@..",
+    ".@*o####@.",
+    ".@oo####@.",
+    ".@oo####@.",
+    ".@o#####@.",
     ".@o@##@#@.",
     ".@o#####@.",
     ".@o@@@@#@.",
@@ -326,10 +334,10 @@ BIRD_STRETCH2 = (
 BIRD_SQUASH1 = (
     ".....@@@@@@.....",
     "...@*o######@...",
-    "..@oo########@..",
-    "..@o#@####@##@..",
-    ".@o###########@.",
-    ".@o###@@@@####@.",
+    ".@ooo##########@",
+    ".@o##@####@###@.",
+    "@##############@",
+    "@#####@@@@#####@",
     "@######@@######@",
     "@##############@",
     "@##############@",
@@ -338,9 +346,9 @@ BIRD_SQUASH1 = (
 
 BIRD_SQUASH2 = (
     ".....@@@@@@@@.....",
-    "...@*o########@...",
-    "..@oo#@####@###@..",
-    ".@o####@@@@#####@.",
+    "..@*o##########@..",
+    ".@oo##@####@####@.",
+    "@######@@@@######@",
     "@#######@@#######@",
     "@################@",
     "@################@",
@@ -349,8 +357,8 @@ BIRD_SQUASH2 = (
 
 BIRD_SQUASH3 = (
     ".....@@@@@@@@@@.....",
-    "..@*o##@####@####@..",
-    ".@o#####@@@@######@.",
+    ".@*o###@####@#####@.",
+    "@#######@@@@#######@",
     "@########@@########@",
     "@##################@",
     "@@@@@@@@@@@@@@@@@@@@",
