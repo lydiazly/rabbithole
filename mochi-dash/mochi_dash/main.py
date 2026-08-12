@@ -63,15 +63,6 @@ PLAYING = "playing"
 GAME_OVER = "over"
 
 
-def preview_positions(count: int) -> list[int]:
-    """Evenly spaced stands for the character previews.
-
-    Computed rather than tabulated: a hardcoded pair of x values was an
-    IndexError the moment a third character existed.
-    """
-    return [round(world.WIDTH * (i + 1) / (count + 1)) for i in range(count)]
-
-
 def load_highscore() -> int:
     """Read the stored high score. A missing or corrupt file just means zero."""
     try:
@@ -302,10 +293,10 @@ class Game:
         sheet = characters.sheet_for(character, step)
         left, top = pos
         if character.accessory is not None:
-            art_left, art_right = sheet.accessory[accessory_frame]
-            dx_left, dx_right, dy = character.accessory_anchors[frame]
-            self.canvas.blit(art_left, (left + dx_left, top + dy))
-            self.canvas.blit(art_right, (left + dx_right, top + dy))
+            facings = sheet.accessory[accessory_frame]
+            dy, placements = character.accessory_anchors[frame]
+            for dx, flipped in placements:
+                self.canvas.blit(facings[flipped], (left + dx, top + dy))
         self.canvas.blit(sheet.poses[frame], pos)
 
     def text(self, line: str, y: int, ink, halo, scale: int = 1, x=None) -> None:

@@ -165,31 +165,39 @@ def _span(row):
 
 
 @pytest.mark.parametrize("wearer", WEARERS, ids=lambda c: c.key)
-def test_every_pose_wears_its_accessory_on_the_crown(wearer):
+def test_every_pose_wears_its_accessory_on_the_head(wearer):
     """Anchors are derived from the wearer's own art, pose by pose.
 
-    Ears floating off the side of a pancake, or buried inside a stretched one,
-    would be the obvious failure of computing them rather than authoring them.
+    An accessory floating off the side of a pancake, or buried inside a
+    stretched one, would be the obvious failure of computing them rather than
+    authoring them. Covers both kinds: Coco's mirrored ears and Jojo's single
+    centred crest.
     """
-    ear = wearer.accessory
-    for name, rows in wearer.poses.items():
+    art = wearer.accessory
+    for name in wearer.poses:
         w, h = sprites.POSE_SIZES[name]
-        left, right, dy = wearer.accessory_anchors[name]
-        assert 0 <= left, name
-        assert right + ear.width <= w, name
-        assert left + ear.width <= right, f"{name}: the two sides overlap"
+        dy, placements = wearer.accessory_anchors[name]
+        assert placements, name
+        for dx, _ in placements:
+            assert 0 <= dx, name
+            assert dx + art.width <= w, name
+        xs = sorted(dx for dx, _ in placements)
+        for a, b in zip(xs, xs[1:]):
+            assert a + art.width <= b, f"{name}: two pieces overlap"
         assert dy < 0, name
-        assert dy + ear.height <= h, name
-        assert dy + ear.height > 0, f"{name}: floats off the top"
+        assert dy + art.height <= h, name
+        assert dy + art.height > 0, f"{name}: floats off the top"
 
 
 @pytest.mark.parametrize("wearer", WEARERS, ids=lambda c: c.key)
 def test_accessories_sit_symmetrically(wearer):
-    ear = wearer.accessory
+    """Whatever the placement, the set of pieces is symmetric about the body."""
+    art = wearer.accessory
     for name in wearer.poses:
         w, _ = sprites.POSE_SIZES[name]
-        left, right, _ = wearer.accessory_anchors[name]
-        assert left == w - (right + ear.width), name
+        xs = sorted(dx for dx, _ in wearer.accessory_anchors[name][1])
+        mirrored = sorted(w - (dx + art.width) for dx in xs)
+        assert xs == mirrored, name
 
 
 @pytest.mark.parametrize("wearer", WEARERS, ids=lambda c: c.key)
@@ -200,13 +208,13 @@ def test_the_accessory_never_overhangs_the_head_beneath_it(wearer):
     below, so the outline pinched inward right under the ears and they stopped
     reading as triangles.
     """
-    ear = wearer.accessory
+    art = wearer.accessory
     for name, rows in wearer.poses.items():
-        left, right, _ = wearer.accessory_anchors[name]
+        _, placements = wearer.accessory_anchors[name]
         crown_first, crown_last = _span(rows[0])
         below_first, below_last = _span(rows[1])
-        base_first = min(left, crown_first)
-        base_last = max(right + ear.width - 1, crown_last)
+        base_first = min([crown_first] + [dx for dx, _ in placements])
+        base_last = max([crown_last] + [dx + art.width - 1 for dx, _ in placements])
         assert base_first >= below_first, f"{name}: overhangs left"
         assert base_last <= below_last, f"{name}: overhangs right"
 
@@ -273,17 +281,6 @@ def test_a_new_character_needs_nothing_but_its_own_definition():
             assert surf.get_size() == sprites.POSE_SIZES[name]
 
 
-@pytest.mark.parametrize("count", range(2, 6))
-def test_the_menu_lays_out_any_number_of_options(count):
-    """A hardcoded pair of x positions was an IndexError at three characters."""
-    xs = main.preview_positions(count)
-    assert len(xs) == count and xs == sorted(xs)
-    assert all(0 < x < wd.WIDTH for x in xs)
-    widest = max(w for w, _ in sprites.POSE_SIZES.values())
-    gaps = [b - a for a, b in zip(xs, xs[1:])]
-    assert min(gaps) > widest, f"previews would overlap at {count}"
-
-
 def test_world_art_is_shared_between_characters_not_copied_per_character():
     """World art is keyed on the scene and step, never on the character.
 
@@ -292,12 +289,12 @@ def test_world_art_is_shared_between_characters_not_copied_per_character():
     """
     assert scenes.sheet_for(scenes.DESERT, 0) is scenes.sheet_for(scenes.DESERT, 0)
     assert scenes.sheet_for(scenes.SNOW, 0) is not scenes.sheet_for(scenes.DESERT, 0)
-    slime_sheet = characters.sheet_for(characters.SLIME, 0)
-    assert characters.sheet_for(characters.SLIME, 0) is slime_sheet
-    assert characters.sheet_for(characters.CAT, 0) is not slime_sheet
+    momo_sheet = characters.sheet_for(characters.MOMO, 0)
+    assert characters.sheet_for(characters.MOMO, 0) is momo_sheet
+    assert characters.sheet_for(characters.COCO, 0) is not momo_sheet
     # A character sheet holds no world art at all any more.
-    assert not hasattr(slime_sheet, "ground")
-    assert not hasattr(slime_sheet, "flyer")
+    assert not hasattr(momo_sheet, "ground")
+    assert not hasattr(momo_sheet, "flyer")
 
 
 # -- the animator -----------------------------------------------------------

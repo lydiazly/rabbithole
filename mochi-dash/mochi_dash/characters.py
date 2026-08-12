@@ -39,6 +39,11 @@ class Character:
     # flag, so a character with horns instead of ears is a different value here
     # and no new code anywhere.
     accessory: sprites.Accessory | None = None
+    # A separate day/night pair for the accessory when it is not the same stuff
+    # as the body -- Jojo's crest is grey feathers on a blue bird. Defaults to
+    # the body's own colours, which is what ears want.
+    accessory_day: Look | None = None
+    accessory_night: Look | None = None
     accessory_anchors: dict = None
 
     def __post_init__(self):
@@ -54,6 +59,8 @@ class Character:
                     f"must be {sprites.POSE_SIZES[name]} -- a character cannot "
                     f"change a hitbox"
                 )
+        object.__setattr__(self, "accessory_day", self.accessory_day or self.day)
+        object.__setattr__(self, "accessory_night", self.accessory_night or self.night)
         object.__setattr__(
             self,
             "accessory_anchors",
@@ -61,9 +68,9 @@ class Character:
         )
 
 
-SLIME = Character(
-    key="slime",
-    name="SLIME",
+MOMO = Character(
+    key="momo",
+    name="MOMO",
     day=Look(
         body=(92, 208, 168),
         sheen=(146, 236, 205),
@@ -78,11 +85,11 @@ SLIME = Character(
     ),
 )
 
-# Kept warm at night rather than shifted blue like the slime: an orange cat that
+# Kept warm at night rather than shifted blue like Momo: an orange cat that
 # turns blue after dark stops being an orange cat.
-CAT = Character(
-    key="cat",
-    name="CAT",
+COCO = Character(
+    key="coco",
+    name="COCO",
     day=Look(
         body=(242, 152, 72),
         sheen=(255, 198, 126),
@@ -99,8 +106,41 @@ CAT = Character(
     accessory=sprites.EARS,
 )
 
-CHARACTERS = (SLIME, CAT)
-DEFAULT = SLIME
+# Sky blue, with a grey crest that is deliberately not tinted by the body's
+# colours -- feathers of a different colour are the point of it.
+JOJO = Character(
+    key="jojo",
+    name="JOJO",
+    day=Look(
+        body=(120, 196, 240),
+        sheen=(176, 224, 252),
+        spec=(238, 250, 255),
+        outline=(34, 100, 152),
+    ),
+    night=Look(
+        body=(118, 152, 228),
+        sheen=(166, 194, 250),
+        spec=(228, 240, 255),
+        outline=(40, 60, 130),
+    ),
+    poses=sprites.BIRD_POSES,
+    accessory=sprites.CREST,
+    accessory_day=Look(
+        body=(112, 118, 128),
+        sheen=(150, 156, 166),
+        spec=(196, 202, 210),
+        outline=(56, 60, 68),
+    ),
+    accessory_night=Look(
+        body=(96, 104, 124),
+        sheen=(132, 140, 160),
+        spec=(180, 188, 206),
+        outline=(44, 50, 64),
+    ),
+)
+
+CHARACTERS = (MOMO, COCO, JOJO)
+DEFAULT = MOMO
 
 
 def by_key(key: str) -> Character:
@@ -115,6 +155,10 @@ def look_for_step(character: Character, step: int) -> Look:
     return blend(character.day, character.night, step)
 
 
+def accessory_look_for_step(character: Character, step: int) -> Look:
+    return blend(character.accessory_day, character.accessory_night, step)
+
+
 _sheets: dict[tuple[str, int], sprites.CharacterSheet] = {}
 
 
@@ -127,6 +171,9 @@ def sheet_for(character: Character, step: int) -> sprites.CharacterSheet:
     key = (character.key, step)
     if key not in _sheets:
         _sheets[key] = sprites.CharacterSheet(
-            look_for_step(character, step), character.poses, character.accessory
+            look_for_step(character, step),
+            character.poses,
+            character.accessory,
+            accessory_look_for_step(character, step),
         )
     return _sheets[key]

@@ -247,6 +247,121 @@ CAT_POSES = {
     "squash3": CAT_SQUASH3,
 }
 
+# -- the bird --------------------------------------------------------------
+#
+# A rice ball rather than a dome: narrow at the crown and widening all the way
+# down to a flat base. Eyes sit a row lower than the slime's but stay one pixel,
+# and the beak is a two-row wedge. Same seven sizes as everybody else.
+
+BIRD_ROUND = (
+    ".....@@@@.....",
+    "....@o###@....",
+    "...@*o####@...",
+    "...@oo####@...",
+    "..@o#######@..",
+    "..@o#######@..",
+    ".@o#@####@##@.",
+    ".@o#########@.",
+    ".@o##@@@@###@.",
+    "@#####@@#####@",
+    "@############@",
+    "@@@@@@@@@@@@@@",
+)
+
+BIRD_ROUND_B = (
+    ".....@@@@.....",
+    "....@o###@....",
+    "...@*o####@...",
+    "..@o#######@..",
+    "..@o#######@..",
+    ".@o#@####@##@.",
+    ".@o#########@.",
+    ".@o##@@@@###@.",
+    "@#####@@#####@",
+    "@############@",
+    "@@@@@@@@@@@@@@",
+)
+
+BIRD_STRETCH1 = (
+    "....@@@@....",
+    "....@o#@....",
+    "...@*o##@...",
+    "...@oo##@...",
+    "...@oo##@...",
+    "..@o#####@..",
+    "..@o@##@#@..",
+    "..@o#####@..",
+    ".@o#######@.",
+    ".@o#@@@@##@.",
+    ".@o##@@###@.",
+    "@##########@",
+    "@##########@",
+    "@@@@@@@@@@@@",
+)
+
+BIRD_STRETCH2 = (
+    "...@@@@...",
+    "...@o#@...",
+    "...@o#@...",
+    "..@*o##@..",
+    "..@oo##@..",
+    "..@oo##@..",
+    ".@o@##@#@.",
+    ".@o#####@.",
+    ".@o@@@@#@.",
+    ".@o#@@##@.",
+    "@########@",
+    "@########@",
+    "@########@",
+    "@########@",
+    "@########@",
+    "@########@",
+    "@@@@@@@@@@",
+)
+
+BIRD_SQUASH1 = (
+    ".....@@@@@@.....",
+    "...@*o######@...",
+    "..@oo########@..",
+    "..@o#@####@##@..",
+    ".@o###########@.",
+    ".@o###@@@@####@.",
+    "@######@@######@",
+    "@##############@",
+    "@##############@",
+    "@@@@@@@@@@@@@@@@",
+)
+
+BIRD_SQUASH2 = (
+    ".....@@@@@@@@.....",
+    "...@*o########@...",
+    "..@oo#@####@###@..",
+    ".@o####@@@@#####@.",
+    "@#######@@#######@",
+    "@################@",
+    "@################@",
+    "@@@@@@@@@@@@@@@@@@",
+)
+
+BIRD_SQUASH3 = (
+    ".....@@@@@@@@@@.....",
+    "..@*o##@####@####@..",
+    ".@o#####@@@@######@.",
+    "@########@@########@",
+    "@##################@",
+    "@@@@@@@@@@@@@@@@@@@@",
+)
+
+BIRD_POSES = {
+    "round": BIRD_ROUND,
+    "round_b": BIRD_ROUND_B,
+    "stretch1": BIRD_STRETCH1,
+    "stretch2": BIRD_STRETCH2,
+    "squash1": BIRD_SQUASH1,
+    "squash2": BIRD_SQUASH2,
+    "squash3": BIRD_SQUASH3,
+}
+
 # -- obstacles ------------------------------------------------------------
 
 # Three-pixel trunks. A one-pixel trunk is technically a cactus and reads on
@@ -384,6 +499,28 @@ EAR_H = 4
 # hat balanced on top.
 EAR_SINK = 1
 
+# -- the bird's crest ------------------------------------------------------
+#
+# A single centred tuft rather than a mirrored pair, which is why `Accessory`
+# takes a placement at all. Two pixels wide so it centres exactly: every pose is
+# an even number of pixels across.
+TUFT = (
+    (  # leaning right
+        "..@.",
+        ".@#.",
+        "@##.",
+        "@@@@",
+    ),
+    (  # leaning left
+        ".@..",
+        ".#@.",
+        ".##@",
+        "@@@@",
+    ),
+)
+
+TUFT_IDLE = ((0, 22), (1, 20))
+
 # -- scenery and effects --------------------------------------------------
 
 CLOUD_BIG = (
@@ -485,7 +622,7 @@ class Accessory:
     follow it.
     """
 
-    def __init__(self, frames, idle, sink: int = 1):
+    def __init__(self, frames, idle, sink: int = 1, paired: bool = True):
         if not frames:
             raise ValueError("an accessory needs at least one frame")
         sizes = set()
@@ -500,24 +637,39 @@ class Accessory:
         self.frames = tuple(frames)
         self.idle = tuple(idle)
         self.sink = sink
+        self.paired = paired
         self.width, self.height = sizes.pop()
         self.cycle = sum(ticks for _, ticks in self.idle)
 
     def anchors_for(self, poses) -> dict:
-        """(left x, right x, y) per pose, relative to its top-left corner.
+        """Per pose: (y, ((x, mirrored), ...)) relative to its top-left corner.
+
+        A list of placements rather than a fixed left/right pair, because not
+        every accessory is symmetric about the head: ears are two mirrored
+        copies on the shoulders, a crest is one piece in the middle.
 
         Computed from the wearer's own art -- a character with its own poses has
-        its own crowns, and reading them off somebody else's would put the ears
-        in the wrong place.
+        its own crowns, and reading them off somebody else's would put the
+        accessory in the wrong place.
 
-        Aligned to the row *below* the crown rather than the crown itself. The
-        accessory's base is its widest row and sits level with the crown, so
-        anchoring to the crown pushed it a pixel wider than the head immediately
-        underneath: the outline pinched inward right below the ears and the
-        triangle stopped reading as one.
+        A paired accessory aligns to the row *below* the crown rather than the
+        crown itself. Its base is its widest row and sits level with the crown,
+        so anchoring to the crown pushed it a pixel wider than the head
+        immediately underneath: the outline pinched inward right below the ears
+        and the triangle stopped reading as one.
         """
         anchors = {}
         for name, rows in poses.items():
+            dy = self.sink - self.height
+            if not self.paired:
+                width = len(rows[0])
+                if (width - self.width) % 2:
+                    raise ValueError(
+                        f"pose {name} is {width}px wide, which cannot centre a "
+                        f"{self.width}px accessory on the pixel grid"
+                    )
+                anchors[name] = (dy, (((width - self.width) // 2, False),))
+                continue
             first, last = _span(rows[1] if len(rows) > 1 else rows[0])
             left = first
             right = last - self.width + 1
@@ -526,7 +678,7 @@ class Accessory:
                     f"pose {name} is too narrow for a {self.width}px accessory: "
                     f"the two sides would overlap"
                 )
-            anchors[name] = (left, right, self.sink - self.height)
+            anchors[name] = (dy, ((left, False), (right, True)))
         return anchors
 
     def frame_at(self, tick: int) -> int:
@@ -540,23 +692,23 @@ class Accessory:
 
 
 EARS = Accessory(EAR_LEFT, EAR_IDLE, sink=EAR_SINK)
+CREST = Accessory(TUFT, TUFT_IDLE, sink=1, paired=False)
 
 
 class CharacterSheet:
     """One character's poses and accessory, at one day/night step."""
 
-    def __init__(self, look, poses, accessory: Accessory | None):
-        tones = {
-            "@": look.outline,
-            "#": look.body,
-            "o": look.sheen,
-            "*": look.spec,
-        }
-        self.poses = {n: build(r, tones) for n, r in poses.items()}
-        # Left and right are built together so a character without an accessory
-        # builds neither, rather than paying for ears it never wears.
+    def __init__(self, look, poses, accessory: Accessory | None, accessory_look=None):
+        def tones_of(l):
+            return {"@": l.outline, "#": l.body, "o": l.sheen, "*": l.spec}
+
+        self.poses = {n: build(r, tones_of(look)) for n, r in poses.items()}
+        # Both facings are built even for a centred accessory: it is two tiny
+        # surfaces, and it keeps the draw code from having to know which kind it
+        # is holding. A character without one builds neither.
+        extra = tones_of(accessory_look or look)
         self.accessory = tuple(
-            (build(rows, tones), build(mirrored(rows), tones))
+            (build(rows, extra), build(mirrored(rows), extra))
             for rows in (accessory.frames if accessory else ())
         )
 
@@ -601,6 +753,7 @@ POSE_SIZES = {name: sprite_size(rows) for name, rows in SLIME_POSES.items()}
 ALL_ART = {
     **{f"slime.{n}": r for n, r in SLIME_POSES.items()},
     **{f"cat.{n}": r for n, r in CAT_POSES.items()},
+    **{f"bird.{n}": r for n, r in BIRD_POSES.items()},
     "cactus_small": CACTUS_SMALL,
     "cactus_large": CACTUS_LARGE,
     "pine_small": PINE_SMALL,
@@ -612,4 +765,5 @@ ALL_ART = {
     "moon": MOON,
     **{f"puff.{i}": r for i, r in enumerate(PUFF)},
     **{f"ear.{i}": r for i, r in enumerate(EAR_LEFT)},
+    **{f"tuft.{i}": r for i, r in enumerate(TUFT)},
 }
