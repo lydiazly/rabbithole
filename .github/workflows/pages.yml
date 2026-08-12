@@ -52,7 +52,11 @@ jobs:
             --width 900 --height 324 \
             stage/mochi-dash
 
+      # enablement, so a fresh clone of this repository publishes without anyone
+      # having to find the setting first.
       - uses: actions/configure-pages@v5
+        with:
+          enablement: true
       - uses: actions/upload-pages-artifact@v3
         with:
           path: stage/mochi-dash/build/web
