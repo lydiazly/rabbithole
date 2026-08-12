@@ -8,9 +8,25 @@
 
 set -euo pipefail
 
-cd "$(dirname "${BASH_SOURCE[0]}")"
+# Walk to the real script before looking around, because the games are found
+# relative to where this file lives. Plain `dirname $0` breaks the obvious way
+# to make this runnable from anywhere -- a symlink into ~/bin -- by landing in
+# the directory of the link rather than the repository.
+#
+# readlink without -f, in a loop, because -f is GNU-only; the loop also handles
+# a chain of links and link targets written relative to their own directory.
+script=${BASH_SOURCE[0]}
+while [[ -L $script ]]; do
+    target=$(readlink "$script")
+    if [[ $target == /* ]]; then
+        script=$target
+    else
+        script=$(cd -P "$(dirname "$script")" && pwd)/$target
+    fi
+done
+cd "$(cd -P "$(dirname "$script")" && pwd)"
 
-self=$(basename "$0")
+self=$(basename "${BASH_SOURCE[0]}")
 
 die() {
     printf '%s\n' "$*" >&2
