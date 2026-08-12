@@ -11,12 +11,28 @@ Parsed with regexes rather than tomllib, which arrived in 3.11 while this projec
 still claims 3.10.
 """
 
+import importlib.util
 import re
 from pathlib import Path
+
+import pytest
+
+from mochi_dash import main as game
+from mochi_dash import world as wd
 
 ROOT = Path(__file__).resolve().parent.parent
 WEB_ENTRY = ROOT / "main.py"
 MANIFEST = ROOT / "pyproject.toml"
+STYLESHEET = ROOT / "web" / "page.css"
+
+
+def script(name: str):
+    """Import one of the web/ build scripts, which are not part of the package."""
+    path = ROOT / "web" / f"{name}.py"
+    spec = importlib.util.spec_from_file_location(f"web_{name}", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 DEPENDENCIES = re.compile(r"dependencies\s*=\s*\[(.*?)\]", re.DOTALL)
 QUOTED = re.compile(r'"([^"]+)"')
@@ -67,3 +83,50 @@ def test_the_web_entry_point_declares_every_runtime_dependency():
 def test_the_web_entry_point_needs_pygame():
     """A guard on the guard: the comparison above passes if both sides go empty."""
     assert "pygame-ce" in dependencies_in(pep723_block(WEB_ENTRY.read_text()))
+
+
+# -- the page around the game -----------------------------------------------
+
+
+def css_length(name: str) -> int:
+    """The pixel value of a custom property in page.css."""
+    found = re.search(rf"{name}:\s*(\d+)px", STYLESHEET.read_text())
+    assert found, f"page.css declares no {name}"
+    return int(found.group(1))
+
+
+def test_the_canvas_is_capped_at_the_size_the_desktop_window_opens():
+    """The web canvas must not outgrow the window the game was drawn for.
+
+    pygbag's template stretches the canvas to the viewport, so page.css caps it.
+    That cap is the desktop window's size written out again, which is the kind of
+    duplicate that goes stale the moment anyone touches SCALE.
+    """
+    assert css_length("--game-width") == wd.WIDTH * game.SCALE
+    assert css_length("--game-height") == wd.HEIGHT * game.SCALE
+
+
+def test_restyling_puts_the_stylesheet_last_in_the_head():
+    """Last, or the template's own rules win on equal specificity."""
+    restyle = script("restyle").restyle
+    out = restyle("<head><style>a{}</style></head><body></body>", "b{color:red}")
+    assert out.index("b{color:red}") > out.index("a{}")
+    assert out.index("b{color:red}") < out.index("</head>")
+
+
+def test_restyling_a_page_it_does_not_recognise_is_an_error():
+    """The failure to avoid is doing nothing quietly and shipping the default."""
+    with pytest.raises(ValueError, match="nowhere to put the stylesheet"):
+        script("restyle").restyle("<html><body>no head</body></html>", "b{}")
+
+
+def test_the_favicon_is_a_square_of_momo():
+    """Square because tabs are, and not blank -- a transparent icon is invisible."""
+    icon = script("make_favicon").build()
+    assert icon.get_size() == (64, 64)
+    opaque = sum(
+        icon.get_at((x, y)).a > 0
+        for x in range(icon.get_width())
+        for y in range(icon.get_height())
+    )
+    assert opaque > 64 * 64 // 4, "Momo covers almost none of the icon"

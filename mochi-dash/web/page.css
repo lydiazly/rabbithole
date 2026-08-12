@@ -1,0 +1,126 @@
+/*
+ * The page around the game.
+ *
+ * pygbag's own template dresses the page in powderblue, a green box with blue
+ * bold Arial inside it, and a canvas stretched to fill the window -- which on a
+ * wide screen blows a 300x108 canvas up to several times the size it was drawn
+ * for. This restyles all of that, in the colours the desert scene already uses
+ * (mochi_dash/scenes.py), so the frame reads as part of the game rather than as
+ * the loader it is.
+ *
+ * Injected into the built index.html by restyle.py. Only presentation belongs
+ * here: the template's markup and scripts are what the loader runs on.
+ */
+
+:root {
+    --sky: #9bd1e5;
+    --horizon: #bee4f0;
+    --sand: #ceb891;
+    --ink: #2c3e4a;
+    --cactus: #568254;
+    --cloud: #f6fcff;
+
+    /* The window the desktop game opens: world.WIDTH x world.HEIGHT at SCALE 3.
+       The canvas never exceeds it, so the pixels stay the size they were drawn. */
+    --game-width: 900px;
+    --game-height: 324px;
+}
+
+/* Slate rather than sky, because the canvas has its own sky at the top and its
+   own sand at the bottom; a blue surround would run into one and fight the
+   other. Dark and flat, it reads as the edge of a screen.
+   !important because the template assigns body.style.background from Python
+   once the canvas is up, and an inline style otherwise wins. */
+html,
+body {
+    background: var(--ink) !important;
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    overflow: hidden; /* the canvas is absolutely positioned; nothing scrolls */
+    font-family: ui-monospace, "DejaVu Sans Mono", monospace;
+}
+
+/* Capped at the desktop window's size and centred. Auto width and height let
+   the canvas fall back to its own framebuffer size, and the max-* pair scales it
+   down proportionally on a screen too small for it rather than cropping.
+   !important throughout: emscripten writes width and height straight onto the
+   element when it handles a resize. */
+canvas.emscripten {
+    width: auto !important;
+    height: auto !important;
+    max-width: min(var(--game-width), 100vw) !important;
+    max-height: min(var(--game-height), 100vh) !important;
+    margin: auto; /* with the template's inset-0, centres on both axes */
+    image-rendering: pixelated; /* scaled down, the art must not go soft */
+}
+
+/* The loader's message: "Loading, please wait" and, on a fresh tab, "please
+   click to start". Square corners and flat colour, because rounded and shaded is
+   the one thing that would look out of place in front of this game.
+
+   Centred here rather than left to the template, which positions this box from
+   JS but only once something calls show_infobox() -- until then it sits wherever
+   the flow leaves it, which is the top-left corner. !important because that JS
+   writes left and top straight onto the element; both routes land centred. */
+#infobox {
+    left: 50% !important;
+    top: 50% !important;
+    transform: translate(-50%, -50%);
+    background: var(--sky);
+    color: var(--ink);
+    border: 3px solid var(--ink);
+    border-radius: 0;
+    padding: 14px 22px;
+    font-family: inherit;
+    font-weight: bold;
+    font-size: 15px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    text-align: center;
+    box-shadow: 0 6px 0 rgb(0 0 0 / 25%);
+}
+
+/* The download indicator, stacked under that message instead of off in the
+   corner on its own: two loading widgets in two places read as an unfinished
+   page. Worth keeping rather than hiding, because the runtime is several
+   megabytes and a silent wait is worse than a bar. */
+#transfer {
+    position: fixed;
+    left: 0;
+    right: 0;
+    top: calc(50% + 52px);
+    text-align: center;
+}
+
+#status {
+    margin: 0 0 8px;
+    color: var(--horizon);
+    font-family: inherit;
+    font-weight: bold;
+    font-size: 13px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+/* Square and flat, in the scene's colours. The pseudo-elements are how a
+   progress bar's fill is reached, and the two engines each need their own. */
+#progress {
+    appearance: none;
+    height: 12px;
+    width: 260px;
+    border: 2px solid var(--horizon);
+    background: transparent;
+}
+
+#progress::-webkit-progress-bar {
+    background: transparent;
+}
+
+#progress::-webkit-progress-value {
+    background: var(--cactus);
+}
+
+#progress::-moz-progress-bar {
+    background: var(--cactus);
+}
