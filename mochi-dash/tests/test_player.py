@@ -824,6 +824,99 @@ def test_the_end_of_a_dash_says_so_in_more_than_one_way():
     )
 
 
+def test_the_shake_settles_instead_of_leaving_the_screen_crooked():
+    """Each frame redraws the canvas and shifts it once, so the offsets are
+    absolute rather than cumulative -- and the last one has to be home.
+
+    A pattern ending anywhere else would leave the whole picture a pixel off
+    until the next smash happened to correct it.
+    """
+    assert main.SMASH_SHAKE[-1] == (0, 0), "the shake never comes back to centre"
+    assert any(o != (0, 0) for o in main.SMASH_SHAKE), "the shake does not move"
+    for dx, dy in main.SMASH_SHAKE:
+        assert abs(dx) <= 1 and abs(dy) <= 1, (dx, dy)
+
+
+def test_hit_stop_holds_the_world_still_without_stacking():
+    """Two frames per impact, and one impact per frame however many were struck.
+
+    A cluster is one hit to the player, and hit-stop that stacked would turn a
+    three-cactus cluster into a sixth of a second of hang.
+    """
+    assert main.SMASH_FREEZE / 60 < 0.1, "long enough to read as a stutter"
+
+    import os
+    os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
+    import pygame
+    pygame.init()
+    pygame.display.set_mode((1, 1))
+
+    class Held(dict):
+        def __getitem__(self, key):
+            return self.get(key, False)
+
+    real = pygame.key.get_pressed
+    pygame.key.get_pressed = lambda: Held()
+    try:
+        game = main.Game()
+        game.start_run()
+        game.world.speed = wd.SPEED_MAX
+        game.start_dash()
+        game.world.hush(99.0)  # no spawning: place the cluster by hand
+        left, _, width, _ = game.player.hitbox()
+        game.world.obstacles = [
+            wd.Obstacle(left + width - 1 + i * 2, wd.GROUND_Y - wd.SMALL_BOX[1],
+                        *wd.SMALL_BOX, "small")
+            for i in range(3)
+        ]
+        game.update(main.DT)
+        assert game.freeze == main.SMASH_FREEZE, (
+            f"three obstacles struck gave {game.freeze} frames of hit-stop"
+        )
+        # And nothing moves while it lasts.
+        held_x = [ob.x for ob in game.world.obstacles]
+        for _ in range(main.SMASH_FREEZE):
+            game.update(main.DT)
+            assert [ob.x for ob in game.world.obstacles] == held_x
+        game.update(main.DT)
+        assert [ob.x for ob in game.world.obstacles] != held_x, "never resumed"
+    finally:
+        pygame.key.get_pressed = real
+
+
+def test_a_smashed_flyer_puffs_where_it_was_hit():
+    """Not on the ground a body-length below it, which is where it used to."""
+    import os
+    os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
+    import pygame
+    pygame.init()
+    pygame.display.set_mode((1, 1))
+
+    class Held(dict):
+        def __getitem__(self, key):
+            return self.get(key, False)
+
+    real = pygame.key.get_pressed
+    pygame.key.get_pressed = lambda: Held()
+    try:
+        game = main.Game()
+        game.start_run()
+        game.world.speed = wd.SPEED_MAX
+        game.start_dash()
+        game.world.hush(99.0)
+        w, h = wd.AIR_BOX
+        top = wd.GROUND_Y - wd.AIR_LOW_CLEAR - h
+        left, _, width, _ = game.player.hitbox()
+        game.world.obstacles = [wd.Obstacle(left + width - 1, top, w, h, "flyer")]
+        game.update(main.DT)
+        assert game.puffs.items, "a smash with no puff at all"
+        for _, y, _, _ in game.puffs.items:
+            assert abs(y - (top + h)) < 1, f"puff at y={y}, flyer bottom {top + h}"
+            assert y < wd.GROUND_Y, "puffed on the ground under the flyer"
+    finally:
+        pygame.key.get_pressed = real
+
+
 def test_jumping_during_a_dash_costs_nothing():
     """Which is why the dash does not need to take the jump away.
 

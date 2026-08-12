@@ -115,6 +115,21 @@ DASH_PROMPT = "SMASH THROUGH"
 DASH_PROMPT_SECONDS = 1.6
 DASH_PROMPT_BLINK = 14  # frames lit, frames dark: about two blinks a second
 
+# Smashing something should feel like it cost the obstacle rather than the
+# player. Three things at once, none of them expensive:
+#
+# Hit-stop -- the world holds still for two frames on impact. It is the oldest
+# trick in the genre and the strongest: a hit that stops time reads as a hit that
+# had mass. Two frames is 33ms, under the threshold where it registers as a
+# stutter, and it does not stack when a cluster is struck in one frame.
+#
+# Shake -- the whole canvas offset by a pixel for a few frames. One pixel of 108
+# is a lot of shake, which is why the pattern settles rather than repeating.
+# Written out rather than randomised so it is the same shake every time, and so
+# nothing has to own a random state to draw a frame.
+SMASH_FREEZE = 2
+SMASH_SHAKE = ((0, 1), (1, -1), (-1, 1), (0, -1), (0, 0))
+
 # Speed lines. Their positions come out of the tick, so the whole effect is five
 # fills and nothing to store, reset or tidy up when the dash ends. The rows dodge
 # the HUD strip and the row the prompt is printed on, or they read as stray
@@ -164,6 +179,8 @@ class Game:
         self.dash_on = False
         self.dash_cooldown = 0.0
         self.recovery = 0.0
+        self.freeze = 0
+        self.shake = 0
         self.state = MENU
 
     # -- state transitions ------------------------------------------------
@@ -197,6 +214,8 @@ class Game:
         self.dash_on = False
         self.dash_cooldown = 0.0
         self.recovery = 0.0
+        self.freeze = 0
+        self.shake = 0
 
     def start_run(self) -> None:
         self.go_to_title()
@@ -360,6 +379,15 @@ class Game:
             self.puffs.update(dt, 0.0)
             return
 
+        # Hit-stop. Everything holds except the counters that draw it, so the
+        # shake keeps moving over a world that does not. A jump pressed during
+        # these two frames is already in the buffer and survives.
+        self.shake = max(0, self.shake - 1)
+        if self.freeze > 0:
+            self.freeze -= 1
+            self.tick += 1
+            return
+
         keys = pygame.key.get_pressed()
         holding_jump = any(keys[k] for k in JUMP_KEYS)
         ducking = any(keys[k] for k in DUCK_KEYS)
@@ -406,7 +434,13 @@ class Game:
             if not ob.scored:
                 self.award(world.points_for(ob))
             self.world.launch(ob)
-            self.puffs.burst(ob.x + ob.w / 2, world.GROUND_Y, True)
+            # At the obstacle, not on the ground under it. A smashed flyer used
+            # to puff at floor level, a body-length below where it was hit.
+            self.puffs.burst(ob.x + ob.w / 2, ob.y + ob.h, True)
+        # One of each per frame, however many were struck: a cluster is one
+        # impact to the player, and stacked hit-stop would read as a hang.
+        self.freeze = SMASH_FREEZE
+        self.shake = len(SMASH_SHAKE)
         sfx.play("smash")
 
     def award(self, cleared: int) -> None:
@@ -450,6 +484,15 @@ class Game:
             )
             self.draw_hud(ink, halo)
 
+        if self.shake:
+            # Shifted before the upscale, so the shake is a whole canvas pixel
+            # and the nearest-neighbour blowup stays exact. `scroll` moves the
+            # content in place and leaves the vacated edge holding its old
+            # pixels, which smears rather than showing a black bar, and costs no
+            # second surface.
+            dx, dy = SMASH_SHAKE[len(SMASH_SHAKE) - self.shake]
+            if dx or dy:
+                self.canvas.scroll(dx, dy)
         pygame.transform.scale(self.canvas, self.screen.get_size(), self.screen)
         pygame.display.flip()
 
