@@ -17,6 +17,7 @@ import pygame
 from . import player as player_mod
 from . import sprites
 from .palette import is_night
+from .sprites import POSE_SIZES
 
 WIDTH = 300
 HEIGHT = 108
@@ -44,15 +45,42 @@ GAP_MARGIN = 20.0
 GAP_RANGE_EARLY = (0.75, 1.50)
 GAP_RANGE_LATE = (0.68, 1.15)
 
-# Scoring. Every obstacle is worth at least a point, and taller ones are worth
-# more: height stands in for how much of a jump a thing demands, where a short
-# cactus takes a hop and a tall one takes a committed one. Read off the hitbox
-# rather than a table of kinds, so a new obstacle scores correctly the day it is
-# added. A cluster is several obstacles and so already scores several times.
+# Scoring pays for what an obstacle asks of you, and every part of that is worked
+# out from where its box sits rather than from its kind, so a new obstacle scores
+# correctly the day it is added.
+#
+#   nothing            -- clears a runner untouched, so it is scenery:  0
+#   a duck             -- would hit standing but not crouched:          2
+#   a jump             -- in the way either way, and taller is harder:  1 upward
+#
+# A cluster is several obstacles and so already scores several times.
 SCORE_HEIGHT_STEP = 5
+DUCK_POINTS = 2
+
+
+def _player_top(pose: str) -> float:
+    """Top edge of the player's hitbox in that pose, standing on the ground."""
+    return GROUND_Y - POSE_SIZES[pose][1] + player_mod.HITBOX_INSET_Y
+
+
+def demands_duck(ob) -> bool:
+    """Would hit a standing player and miss a crouched one."""
+    bottom = ob.y + ob.h
+    return bottom > _player_top("round") and bottom <= _player_top("squash3")
+
+
+def blocks_a_runner(ob) -> bool:
+    """Would touch a player who simply ran at it, upright."""
+    return ob.y < GROUND_Y and ob.y + ob.h > _player_top("round")
 
 
 def points_for(ob) -> int:
+    if not blocks_a_runner(ob):
+        # A high flyer still punishes a badly timed jump, but it asks nothing of
+        # anyone on the ground, so it earns nothing either.
+        return 0
+    if demands_duck(ob):
+        return DUCK_POINTS
     return 1 + max(0, int((ob.h - SMALL_BOX[1]) // SCORE_HEIGHT_STEP))
 
 

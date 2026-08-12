@@ -35,6 +35,8 @@ the sound off.
 
 It opens easy — nothing but single cacti while you find the jump — and adds
 taller ones, clusters and flyers as it speeds up, spacing them a little tighter
-as it goes. A point per obstacle cleared, more for the tall ones, and every
-twenty points earns a **dash**: a few seconds of running faster and flattening
-anything in the way instead of dying to it. Your best run is saved.
+as it goes. Scoring pays for what an obstacle asked of you: a point for a
+cactus and two for a tall one, two for a flyer low enough to duck, and nothing
+at all for one that sails past overhead. Every twenty points earns a **dash** —
+a few seconds of running faster and flattening whatever is in the way instead of
+dying to it. Your best run is saved.

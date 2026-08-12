@@ -286,13 +286,48 @@ def test_switching_scene_rebuilds_the_scenery():
 # -- scoring and the dash ---------------------------------------------------
 
 
-def test_points_grow_with_obstacle_height():
-    """Height stands in for how much of a jump a thing demands."""
-    small = wd.Obstacle(0, 0, *wd.SMALL_BOX, "small")
-    large = wd.Obstacle(0, 0, *wd.LARGE_BOX, "large")
-    flyer = wd.Obstacle(0, 0, *wd.AIR_BOX, "flyer")
-    assert wd.points_for(large) > wd.points_for(small)
-    assert wd.points_for(small) >= 1 and wd.points_for(flyer) >= 1
+def on_ground(box, kind="small"):
+    return wd.Obstacle(0.0, wd.GROUND_Y - box[1], *box, kind)
+
+
+def in_air(clear):
+    w, h = wd.AIR_BOX
+    return wd.Obstacle(0.0, wd.GROUND_Y - clear - h, w, h, "flyer")
+
+
+def test_points_pay_for_what_an_obstacle_demands():
+    """Scoring is derived from where the box sits, not from its kind.
+
+    Placement is the whole input, so these have to be built where the spawner
+    actually puts them -- an earlier version of this test made them at y=0 and
+    was quietly asking about obstacles floating off the top of the canvas.
+    """
+    small = on_ground(wd.SMALL_BOX)
+    large = on_ground(wd.LARGE_BOX, "large")
+    low = in_air(wd.AIR_LOW_CLEAR)
+    high = in_air(wd.AIR_HIGH_CLEAR)
+
+    assert wd.points_for(small) == 1
+    assert wd.points_for(large) > wd.points_for(small), "taller asks more"
+    assert wd.points_for(low) == wd.DUCK_POINTS
+    assert wd.points_for(high) == 0, "asks nothing of a runner, so pays nothing"
+
+
+def test_the_duck_test_is_the_hitbox_and_not_a_constant():
+    """Which flyers demand a duck follows from the poses, not from a number.
+
+    Retune the ducked pose and this has to move with it, or the game would start
+    paying for a duck it no longer needs.
+    """
+    assert wd.demands_duck(in_air(wd.AIR_LOW_CLEAR))
+    assert not wd.demands_duck(in_air(wd.AIR_HIGH_CLEAR))
+    assert not wd.blocks_a_runner(in_air(wd.AIR_HIGH_CLEAR))
+    # And it agrees with what actually collides.
+    standing, ducked = settled(), settled(ducking=True)
+    low = in_air(wd.AIR_LOW_CLEAR)
+    low.x = standing.hitbox()[0]
+    assert pl.rects_overlap(standing.hitbox(), low.rect())
+    assert not pl.rects_overlap(ducked.hitbox(), low.rect())
 
 
 def test_an_obstacle_scores_once_however_the_player_moves():
