@@ -123,6 +123,19 @@ def test_hud_and_menu_strings_fit_the_canvas():
         assert pixelfont.text_width(text, scale) <= wd.WIDTH - 12, text
 
 
+def test_the_two_hud_corners_cannot_collide():
+    """They share a row now, one per end, and the score grows as you play.
+
+    Nothing stops a five-digit score and its high-score twin from reaching the
+    hotkeys, and they would overprint rather than clip.
+    """
+    widest = "HI 99999  99999"
+    keys = "P PAUSE  R RETRY  M MENU"
+    used = (pixelfont.text_width(widest) + pixelfont.text_width(keys)
+            + 2 * main.Game.HUD_MARGIN)
+    assert used < wd.WIDTH, f"{used}px of {wd.WIDTH}px"
+
+
 def test_every_character_the_ui_prints_has_a_glyph():
     """Missing glyphs fall back to a solid block and print as garbage.
 

@@ -484,14 +484,26 @@ class Game:
         pixelfont.draw(self.canvas, line, x + 1, y + 1, halo, scale)
         pixelfont.draw(self.canvas, line, x, y, ink, scale)
 
+    # The character runs between x=22 and x=110 of a 300-pixel canvas, so the
+    # player's eye lives in the left third and the top-left corner is the
+    # cheapest thing on screen to glance at. That corner should hold the thing
+    # worth glancing at repeatedly, which is the score. The hotkeys are reference
+    # text -- read once at the start of a first run and then permanent furniture
+    # -- and they were sitting in the best seat while the number that changes sat
+    # in the far corner. They are also the longer line by a good margin, so the
+    # right-hand side is where there is room for them.
+    HUD_MARGIN = 6
+
     def draw_hud(self, ink, halo) -> None:
         score = f"{self.score:04d}"
         if self.highscore:
             score = f"HI {self.highscore:04d}  {score}"
-        self.text(score, 6, ink, halo, x=world.WIDTH - pixelfont.text_width(score) - 6)
+        self.text(score, 6, ink, halo, x=self.HUD_MARGIN)
 
         if self.state == PLAYING:
-            self.text("P PAUSE  R RETRY  M MENU", 6, ink, halo, x=6)
+            keys = "P PAUSE  R RETRY  M MENU"
+            self.text(keys, 6, ink, halo,
+                      x=world.WIDTH - pixelfont.text_width(keys) - self.HUD_MARGIN)
             self.draw_dash_meter(ink, halo)
             if self.paused:
                 self.text("PAUSED", 34, ink, halo, 2)

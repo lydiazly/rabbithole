@@ -174,7 +174,13 @@ CLUSTER_GAP = 8
 
 # Canvas units per full day/night cycle: about 30 s of play at top speed, 75 s at
 # the opening crawl. Much shorter and the sky starts visibly strobing.
-DAY_LENGTH = 6500.0
+# Pixels of travel in a full day and night. Long enough that the sky is the slow
+# rhythm and the dash is the fast one: at 6500 a cycle settled at 32 seconds
+# against a dash every 17, near enough the same tempo that the two events kept
+# arriving together and competing. At 11000 a cycle is about 54 seconds, or 3.2
+# dashes -- deliberately not a whole number, so the two drift past each other
+# instead of locking into step. First nightfall lands around 40 seconds in.
+DAY_LENGTH = 11000.0
 
 CLOUD_SPEED = 0.15
 FAR_SPEED = 0.25
