@@ -1,0 +1,22 @@
+[project]
+name = "slime-runner"
+version = "0.1.0"
+description = "An endless runner starring a squash-and-stretch jelly slime"
+requires-python = ">=3.10"
+dependencies = ["pygame-ce>=2.5"]
+
+[project.scripts]
+slime-runner = "slime_runner.main:main"
+
+[dependency-groups]
+dev = ["pytest>=8.0"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# A ROS install on PYTHONPATH leaks its pytest plugins into this venv, and they
+# crash on collection. Nothing here uses them. Harmless where ROS is absent.
+addopts = "-p no:launch_testing -p no:launch_ros"

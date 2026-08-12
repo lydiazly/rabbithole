@@ -1,0 +1,6 @@
+[project]
+name = "breakout"
+version = "0.1.0"
+description = "A minimal terminal breakout game"
+requires-python = ">=3.10"
+dependencies = []

@@ -1,0 +1,6 @@
+[project]
+name = "snake"
+version = "0.1.0"
+description = "A minimal terminal snake game"
+requires-python = ">=3.10"
+dependencies = []
