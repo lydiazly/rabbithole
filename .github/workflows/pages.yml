@@ -52,11 +52,12 @@ jobs:
             --width 900 --height 324 \
             stage/mochi-dash
 
-      # enablement, so a fresh clone of this repository publishes without anyone
-      # having to find the setting first.
+      # Pages has to be switched on by hand once, under Settings -> Pages, with
+      # "GitHub Actions" as the source. This step's `enablement: true` looks like
+      # it would do that instead, but creating a Pages site is beyond what
+      # GITHUB_TOKEN is allowed to do: it fails with "Resource not accessible by
+      # integration" however the workflow's permissions are set.
       - uses: actions/configure-pages@v5
-        with:
-          enablement: true
       - uses: actions/upload-pages-artifact@v3
         with:
           path: stage/mochi-dash/build/web
