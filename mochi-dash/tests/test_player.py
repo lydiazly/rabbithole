@@ -824,6 +824,51 @@ def test_the_end_of_a_dash_says_so_in_more_than_one_way():
     )
 
 
+def test_jumping_during_a_dash_costs_nothing():
+    """Which is why the dash does not need to take the jump away.
+
+    An obstacle jumped over is scored when it passes behind, for the same points
+    smashing it would have paid, and it counts the same towards the next dash.
+    If that were ever not true, a player jumping out of habit would be quietly
+    penalised for it and disabling the jump would start to look justified.
+    """
+    import os
+    os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
+    import pygame
+    pygame.init()
+    pygame.display.set_mode((1, 1))
+
+    class Held(dict):
+        def __getitem__(self, key):
+            return self.get(key, False)
+
+    held = Held()
+    real = pygame.key.get_pressed
+    pygame.key.get_pressed = lambda: held
+    try:
+        totals = {}
+        for spam in (False, True):
+            score = toward = 0
+            for seed in range(30):
+                game = main.Game()
+                game.start_run()
+                game.world.rng.seed(seed)
+                game.world.speed = wd.SPEED_MAX
+                game.start_dash()
+                tick = 0
+                while game.dashing and game.state == main.PLAYING:
+                    if spam and tick % 20 == 0:
+                        game.jump_buffer = main.JUMP_BUFFER
+                    game.update(main.DT)
+                    tick += 1
+                score += game.score
+                toward += game.toward_dash
+            totals[spam] = (score, toward)
+    finally:
+        pygame.key.get_pressed = real
+    assert totals[True] == totals[False], totals
+
+
 def test_dying_does_not_sound_like_a_dash_ending():
     """`end_run` ends the dash, and you can never die during one.
 

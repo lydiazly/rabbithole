@@ -570,7 +570,10 @@ class Game:
             filled = min(owed, waited)
         if self.dash_ending and (self.tick // DASH_WARN_BLINK) % 2:
             return  # blinked out: the dash is about to end
-        x = (world.WIDTH - self.DASH_METER_W) // 2
+        # Under the score, sharing its margin: the meter and the number it fills
+        # from are the same fact twice, and the top-left corner is the one the
+        # player is already looking at.
+        x = self.HUD_MARGIN
         y = self.DASH_METER_Y
         self.canvas.fill(halo, (x, y + 1, self.DASH_METER_W, 2))
         self.canvas.fill(ink, (x, y, self.DASH_METER_W, 1))
