@@ -186,7 +186,7 @@ CAT_STRETCH1 = (
 
 CAT_STRETCH2 = (
     "...@@@@...",
-    "..@oo#@@..",
+    ".@@oo#@@@.",
     ".@o**o##@.",
     ".@ooo###@.",
     "@#ooo####@",
@@ -467,10 +467,9 @@ def mirrored(rows):
     return tuple(row[::-1] for row in rows)
 
 
-def _cap_span(rows) -> tuple[int, int]:
-    """First and last filled column of a pose's top row."""
-    top = rows[0]
-    filled = [i for i, char in enumerate(top) if char != TRANSPARENT]
+def _span(row) -> tuple[int, int]:
+    """First and last filled column of one row."""
+    filled = [i for i, char in enumerate(row) if char != TRANSPARENT]
     return filled[0], filled[-1]
 
 
@@ -503,16 +502,32 @@ class Accessory:
         self.sink = sink
         self.width, self.height = sizes.pop()
         self.cycle = sum(ticks for _, ticks in self.idle)
-        # Anchored on the slime's crowns: every character's poses are the same
-        # size, so one table serves them all.
-        self.anchors = {
-            name: self._anchor(rows) for name, rows in SLIME_POSES.items()
-        }
 
-    def _anchor(self, rows) -> tuple[int, int, int]:
-        """(left x, right x, y) relative to the pose's top-left corner."""
-        first, last = _cap_span(rows)
-        return first - self.width + 1, last, self.sink - self.height
+    def anchors_for(self, poses) -> dict:
+        """(left x, right x, y) per pose, relative to its top-left corner.
+
+        Computed from the wearer's own art -- a character with its own poses has
+        its own crowns, and reading them off somebody else's would put the ears
+        in the wrong place.
+
+        Aligned to the row *below* the crown rather than the crown itself. The
+        accessory's base is its widest row and sits level with the crown, so
+        anchoring to the crown pushed it a pixel wider than the head immediately
+        underneath: the outline pinched inward right below the ears and the
+        triangle stopped reading as one.
+        """
+        anchors = {}
+        for name, rows in poses.items():
+            first, last = _span(rows[1] if len(rows) > 1 else rows[0])
+            left = first
+            right = last - self.width + 1
+            if left + self.width > right:
+                raise ValueError(
+                    f"pose {name} is too narrow for a {self.width}px accessory: "
+                    f"the two sides would overlap"
+                )
+            anchors[name] = (left, right, self.sink - self.height)
+        return anchors
 
     def frame_at(self, tick: int) -> int:
         """Where the idle cycle has got to, as a function of a tick count."""

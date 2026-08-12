@@ -1,0 +1,91 @@
+"""Square-wave blips, synthesised at startup rather than shipped as files.
+
+The whole game is generated from source — the art is ASCII in a module, the
+scenery is shape calls — and sound follows the same rule. These are a handful of
+tones built into a buffer with the standard library and handed to the mixer, so
+there are no assets to lose and nothing to keep in sync with the code.
+
+Everything degrades to silence. A machine with no audio device is common — over
+SSH, in a container, in the test suite — and a runner that refuses to start
+because it could not open a mixer would be worse than one that runs quietly.
+"""
+
+import array
+import math
+
+import pygame
+
+SAMPLE_RATE = 22050
+BITS = -16  # signed 16-bit, little endian
+CHANNELS = 1
+# Small buffer: latency between a keypress and its blip is very audible, and
+# there is no music here that would suffer from underruns.
+BUFFER = 512
+
+# The sounds this module knows how to make. Named up front so a call site
+# can be checked against it without an audio device present.
+BUILT = ("jump", "double_jump", "point", "die", "blip")
+
+_sounds: dict[str, pygame.mixer.Sound] = {}
+_ready = False
+enabled = True
+
+
+def _tone(start_hz, end_hz, ms, volume=0.30, duty=0.5) -> pygame.mixer.Sound:
+    """One swept square wave with a linear fade-out.
+
+    Phase is accumulated rather than computed from `t * frequency`, which would
+    tear audibly as the frequency slides.
+    """
+    samples = int(SAMPLE_RATE * ms / 1000)
+    buf = array.array("h")
+    phase = 0.0
+    for i in range(samples):
+        progress = i / samples
+        hz = start_hz + (end_hz - start_hz) * progress
+        phase = (phase + hz / SAMPLE_RATE) % 1.0
+        wave = 1.0 if phase < duty else -1.0
+        envelope = 1.0 - progress
+        buf.append(int(wave * envelope * volume * 32767))
+    return pygame.mixer.Sound(buffer=buf.tobytes())
+
+
+def init() -> None:
+    """Open the mixer and build the tones. Silent, not fatal, if that fails."""
+    global _ready
+    try:
+        # Close whatever is already open first. `pygame.init()` opens the mixer
+        # at its own defaults, and `mixer.init` on an initialised mixer is a
+        # silent no-op -- the buffers below would then be read back at 44100
+        # stereo instead of 22050 mono, making every sound a quarter as long and
+        # an octave and a half sharp.
+        pygame.mixer.quit()
+        pygame.mixer.init(SAMPLE_RATE, BITS, CHANNELS, BUFFER)
+    except pygame.error:
+        _ready = False
+        return
+    _sounds.update(
+        # Rising blip for leaving the ground, a shorter and higher one for the
+        # second jump so the two are distinguishable without looking.
+        jump=_tone(430, 700, 90),
+        double_jump=_tone(700, 980, 70, volume=0.24),
+        # Every hundred points, in the shape of an arcade milestone.
+        point=_tone(880, 1180, 70, volume=0.22, duty=0.25),
+        # Falling and longer: the only sound that is bad news.
+        die=_tone(420, 110, 380, volume=0.34),
+        # Menu movement, kept quiet enough to hold a key down against.
+        blip=_tone(560, 560, 35, volume=0.16, duty=0.25),
+    )
+    _ready = True
+
+
+def play(name: str) -> None:
+    if name not in BUILT:
+        raise KeyError(f"no such sound: {name!r}")
+    if _ready and enabled:
+        _sounds[name].play()
+
+
+def stop() -> None:
+    if _ready:
+        pygame.mixer.stop()

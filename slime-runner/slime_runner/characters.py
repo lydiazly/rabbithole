@@ -39,6 +39,7 @@ class Character:
     # flag, so a character with horns instead of ears is a different value here
     # and no new code anywhere.
     accessory: sprites.Accessory | None = None
+    accessory_anchors: dict = None
 
     def __post_init__(self):
         poses = self.poses if self.poses is not None else sprites.SLIME_POSES
@@ -53,6 +54,11 @@ class Character:
                     f"must be {sprites.POSE_SIZES[name]} -- a character cannot "
                     f"change a hitbox"
                 )
+        object.__setattr__(
+            self,
+            "accessory_anchors",
+            self.accessory.anchors_for(poses) if self.accessory else {},
+        )
 
 
 SLIME = Character(

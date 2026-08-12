@@ -2,7 +2,7 @@
 
 import pytest
 
-from slime_runner import characters, main, pixelfont, scenes, sprites
+from slime_runner import characters, main, pixelfont, scenes, sfx, sprites
 from slime_runner import slime as sl
 from slime_runner import world as wd
 from slime_runner.palette import STEPS, is_night, luminance, step_at
@@ -108,7 +108,8 @@ UI_LINES = [
     ("W/S  ROW    A/D  CHANGE    SPACE  START", 1),
     ("CHARACTER", 1),
     ("SCENE", 1),
-] + [(f"< {c.name} >", 1) for c in characters.CHARACTERS] \
+    ("SOUND", 1),
+] + [(f"< {v} >", 1) for v in main.SOUND_CHOICES] + [(f"< {c.name} >", 1) for c in characters.CHARACTERS] \
   + [(f"< {s.name} >", 1) for s in scenes.SCENES]
 
 
@@ -155,39 +156,64 @@ def test_characters_may_differ_in_art_but_never_in_size():
                     character.key, name)
 
 
-ACCESSORIES = [c.accessory for c in characters.CHARACTERS if c.accessory]
+WEARERS = [c for c in characters.CHARACTERS if c.accessory]
 
 
-@pytest.mark.parametrize("accessory", ACCESSORIES, ids=lambda a: f"{a.width}x{a.height}")
-def test_every_pose_wears_its_accessory_on_the_crown(accessory):
-    """Anchors are derived from each pose's crown, which moves across all seven.
+def _span(row):
+    filled = [i for i, char in enumerate(row) if char != "."]
+    return filled[0], filled[-1]
+
+
+@pytest.mark.parametrize("wearer", WEARERS, ids=lambda c: c.key)
+def test_every_pose_wears_its_accessory_on_the_crown(wearer):
+    """Anchors are derived from the wearer's own art, pose by pose.
 
     Ears floating off the side of a pancake, or buried inside a stretched one,
     would be the obvious failure of computing them rather than authoring them.
     """
-    for name in sprites.SLIME_POSES:
+    ear = wearer.accessory
+    for name, rows in wearer.poses.items():
         w, h = sprites.POSE_SIZES[name]
-        left, right, dy = accessory.anchors[name]
-        # Horizontally: sitting on the crown, not out past the widest point.
-        assert -1 <= left, name
-        assert right + accessory.width <= w + 1, name
-        assert left + accessory.width <= right, f"{name}: the two sides overlap"
-        # Vertically: mostly above the head, but tucked in enough to touch it.
+        left, right, dy = wearer.accessory_anchors[name]
+        assert 0 <= left, name
+        assert right + ear.width <= w, name
+        assert left + ear.width <= right, f"{name}: the two sides overlap"
         assert dy < 0, name
-        assert dy + accessory.height <= h, name
-        assert dy + accessory.height > 0, f"{name}: floats off the top"
+        assert dy + ear.height <= h, name
+        assert dy + ear.height > 0, f"{name}: floats off the top"
 
 
-@pytest.mark.parametrize("accessory", ACCESSORIES, ids=lambda a: f"{a.width}x{a.height}")
-def test_accessories_sit_symmetrically(accessory):
-    for name in sprites.SLIME_POSES:
+@pytest.mark.parametrize("wearer", WEARERS, ids=lambda c: c.key)
+def test_accessories_sit_symmetrically(wearer):
+    ear = wearer.accessory
+    for name in wearer.poses:
         w, _ = sprites.POSE_SIZES[name]
-        left, right, _ = accessory.anchors[name]
-        assert left == w - (right + accessory.width), name
+        left, right, _ = wearer.accessory_anchors[name]
+        assert left == w - (right + ear.width), name
 
 
-@pytest.mark.parametrize("accessory", ACCESSORIES, ids=lambda a: f"{a.width}x{a.height}")
-def test_the_idle_cycle_visits_every_frame_and_loops(accessory):
+@pytest.mark.parametrize("wearer", WEARERS, ids=lambda c: c.key)
+def test_the_accessory_never_overhangs_the_head_beneath_it(wearer):
+    """The base of an ear is its widest row and sits level with the crown.
+
+    Anchored to the crown, it stuck out a pixel past the head immediately
+    below, so the outline pinched inward right under the ears and they stopped
+    reading as triangles.
+    """
+    ear = wearer.accessory
+    for name, rows in wearer.poses.items():
+        left, right, _ = wearer.accessory_anchors[name]
+        crown_first, crown_last = _span(rows[0])
+        below_first, below_last = _span(rows[1])
+        base_first = min(left, crown_first)
+        base_last = max(right + ear.width - 1, crown_last)
+        assert base_first >= below_first, f"{name}: overhangs left"
+        assert base_last <= below_last, f"{name}: overhangs right"
+
+
+@pytest.mark.parametrize("wearer", WEARERS, ids=lambda c: c.key)
+def test_the_idle_cycle_visits_every_frame_and_loops(wearer):
+    accessory = wearer.accessory
     seen = {accessory.frame_at(t) for t in range(accessory.cycle)}
     assert seen == set(range(len(accessory.frames)))
     assert accessory.frame_at(accessory.cycle) == accessory.frame_at(0)
@@ -571,3 +597,44 @@ def test_characters_stay_visible_against_every_sky(scene, step):
             sum(abs(a - b) for a, b in zip(look.outline, sky)),
         )
         assert best > 140, (scene.key, character.key, step, best)
+
+
+# -- sound ------------------------------------------------------------------
+
+
+def test_every_sound_the_game_plays_is_one_that_gets_built():
+    """A typo in a name would KeyError on the event that plays it.
+
+    Read off the real call sites rather than a list kept alongside them, which
+    could drift.
+    """
+    import pathlib
+    import re
+
+    source = pathlib.Path(main.__file__).read_text()
+    played = set()
+    for call in re.findall(r"sfx\.play\(([^)]*)\)", source):
+        played.update(re.findall(r'"(\w+)"', call))
+    assert played, "no sfx.play call sites found -- has the regex gone stale?"
+    assert played <= set(sfx.BUILT), sorted(played - set(sfx.BUILT))
+
+
+def test_sound_is_silent_rather_than_fatal_without_a_device():
+    """Headless machines are the common case, not the exception."""
+    was_ready = sfx._ready
+    try:
+        sfx._ready = False
+        sfx.play("jump")  # must not raise, and must not KeyError
+        sfx.stop()
+    finally:
+        sfx._ready = was_ready
+
+
+def test_a_tone_fills_the_buffer_it_claims_to():
+    """Length is set by the mixer's format, not by the numbers passed in.
+
+    `pygame.init()` opens the mixer at its own defaults, and `mixer.init` on an
+    already-open mixer does nothing, so these buffers were being read back at
+    44100 stereo: every sound came out a quarter of its intended length.
+    """
+    assert sfx.SAMPLE_RATE > 0 and sfx.CHANNELS == 1 and sfx.BITS == -16

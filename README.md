@@ -29,7 +29,8 @@ only, and neither changes the difficulty. Then `space` or `W` to jump, and
 again in mid-air for a second jump worth about half as much height on top; the
 timing is forgiving, and the arc flattens at the top so clearing something is
 not a matter of one frame. `S` flattens you under low flyers, and `A`/`D` shift
-where you stand, further back buying reaction time. `M` reopens the menu.
+where you stand, further back buying reaction time. `M` reopens the menu,
+which also switches the sound off.
 
 It opens easy — nothing but single cacti while you find the jump — and adds
 taller ones, clusters and flyers as it speeds up. Your best run is saved.

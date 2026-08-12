@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pygame
 
-from . import characters, effects, pixelfont, scenes, world
+from . import characters, effects, pixelfont, scenes, sfx, world
 from .palette import step_at
 from .slime import HARD_LANDING, Slime, idle_body_frame
 
@@ -43,7 +43,12 @@ ROW_DOWN_KEYS = (pygame.K_DOWN, pygame.K_s)
 # The menu's rows, top to bottom.
 CHARACTER_ROW = 0
 SCENE_ROW = 1
-MENU_ROWS = (CHARACTER_ROW, SCENE_ROW)
+SOUND_ROW = 2
+MENU_ROWS = (CHARACTER_ROW, SCENE_ROW, SOUND_ROW)
+SOUND_CHOICES = ("ON", "OFF")
+
+# Every hundred points, as arcade scoring has always done.
+POINT_MILESTONE = 100
 
 JUMP_BUFFER = 0.12  # a press just before landing still counts
 
@@ -98,12 +103,13 @@ class Game:
         self.puffs = effects.Puffs()
 
         self.character = characters.DEFAULT
-        self.picks = {SCENE_ROW: 0, CHARACTER_ROW: 0}
+        self.picks = {CHARACTER_ROW: 0, SCENE_ROW: 0, SOUND_ROW: 0}
         self.row = CHARACTER_ROW
         self.preview_tick = 0
         self.highscore = load_highscore()
         self.over_timer = 0.0
         self.jump_buffer = 0.0
+        self.milestone = 0
         self.state = MENU
 
     # -- state transitions ------------------------------------------------
@@ -130,6 +136,7 @@ class Game:
         self.slime.reset()
         self.puffs.clear()
         self.jump_buffer = 0.0
+        self.milestone = 0
 
     def start_run(self) -> None:
         self.go_to_title()
@@ -138,6 +145,8 @@ class Game:
     def end_run(self) -> None:
         self.state = GAME_OVER
         self.over_timer = 0.0
+        sfx.stop()  # a milestone blip over the death sound reads as a reward
+        sfx.play("die")
         self.slime.splat()
         self.puffs.burst(self.slime.x, world.GROUND_Y, True)
         score = int(self.world.score)
@@ -185,7 +194,11 @@ class Game:
         return True
 
     def row_options(self, row: int):
-        return scenes.SCENES if row == SCENE_ROW else characters.CHARACTERS
+        return {
+            CHARACTER_ROW: characters.CHARACTERS,
+            SCENE_ROW: scenes.SCENES,
+            SOUND_ROW: SOUND_CHOICES,
+        }[row]
 
     def menu_key(self, key: int) -> None:
         count = len(self.row_options(self.row))
@@ -208,6 +221,8 @@ class Game:
         else:
             moved = False
         if moved:
+            sfx.enabled = self.picks[SOUND_ROW] == 0
+            sfx.play("blip")
             # The backdrop is the previewed scene, so moving the scene cursor has
             # to rebuild it -- the layers it uses may differ.
             self.world.use_scene(self.previewed_scene)
@@ -238,7 +253,10 @@ class Game:
             kind = self.slime.jump()
             if kind:
                 self.jump_buffer = 0.0
-            if kind == "air":
+            if kind == "ground":
+                sfx.play("jump")
+            elif kind == "air":
+                sfx.play("double_jump")
                 # A puff under its feet in mid-air is the only signal that the
                 # second jump has been spent.
                 self.puffs.burst(self.slime.x, self.slime.y, False)
@@ -248,6 +266,11 @@ class Game:
         if impact:
             self.puffs.burst(self.slime.x, world.GROUND_Y, impact >= HARD_LANDING)
         self.puffs.update(dt, self.world.speed)
+
+        reached = int(self.world.score) // POINT_MILESTONE
+        if reached > self.milestone:
+            self.milestone = reached
+            sfx.play("point")
 
         if self.world.collides(self.slime.hitbox()):
             self.end_run()
@@ -291,7 +314,7 @@ class Game:
         left, top = pos
         if character.accessory is not None:
             art_left, art_right = sheet.accessory[accessory_frame]
-            dx_left, dx_right, dy = character.accessory.anchors[frame]
+            dx_left, dx_right, dy = character.accessory_anchors[frame]
             self.canvas.blit(art_left, (left + dx_left, top + dy))
             self.canvas.blit(art_right, (left + dx_right, top + dy))
         self.canvas.blit(sheet.poses[frame], pos)
@@ -337,6 +360,7 @@ class Game:
         rows = (
             ("CHARACTER", self.previewed_character.name),
             ("SCENE", self.previewed_scene.name),
+            ("SOUND", SOUND_CHOICES[self.picks[SOUND_ROW]]),
         )
         for i, (label, value) in enumerate(rows):
             y = self.MENU_TOP + i * self.MENU_PITCH
@@ -368,6 +392,7 @@ class Game:
 
 def main() -> None:
     pygame.init()
+    sfx.init()
     try:
         game = Game()
     except pygame.error as exc:
