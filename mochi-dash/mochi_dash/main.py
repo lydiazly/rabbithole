@@ -16,7 +16,7 @@ import sys
 import pygame
 
 from . import characters, effects, pixelfont, scenes, sfx, storage, world
-from .palette import STEPS, step_at
+from .palette import step_at
 from .player import HARD_LANDING, Player, idle_body_frame
 
 SCALE = 3
@@ -72,9 +72,18 @@ DASH_SHIMMER_TICKS = 3  # frames per palette step, while dashing
 # and so still clearing the way, until there is room to react.
 # A jump's own airtime is the floor and 0.40 was under it: an obstacle that close
 # is already inside the arc by the time the player commits, so the jump that
-# looked available never was. On top of the airtime goes a beat to see the
-# obstacle and decide, which is the part that was missing.
-DASH_EXIT_REACTION = 0.30
+# looked available never was. On top of the airtime goes time to see the obstacle
+# and decide, which is the part that was missing. 0.30 was still not enough in
+# play -- coming off a dash the player is not reading the ground yet, so the
+# margin has to cover looking up as well as reacting.
+#
+# 0.75 is as far as this is worth taking: the resulting 1.35s reaches 277px at
+# top speed, against a 300px canvas, so past here the rule saturates into "no
+# obstacle is on screen ahead of you" and asking for more changes nothing.
+# Measured across eighty dashes, raising it further moves neither the worst case
+# nor the hold. The hold stays bounded because obstacles spawn at the right edge:
+# mean 0.67s, worst 3.55s, and it never fails to find an exit.
+DASH_EXIT_REACTION = 0.75
 DASH_EXIT_CLEARANCE = world.JUMP_AIRTIME + DASH_EXIT_REACTION
 
 # The last stretch of a dash, where it starts telling you it is about to go: the
@@ -392,22 +401,25 @@ class Game:
             self.draw_menu(step, ink, halo)
         else:
             self.puffs.draw(self.canvas, scenery)
-            # Dashing shimmers the character by running its own day/night colours
-            # past far faster than the sky does -- Mario's starman palette flash,
-            # out of machinery that was already there.
-            look_step = step
+            # Dashing strobes the character through the dash tints -- Mario's
+            # starman palette flash. Deliberately not the day/night steps it used
+            # to run through: those include the night look, so the flash was
+            # indistinguishable from nightfall in one direction and from nothing
+            # at all in the other.
+            dash_tint = None
             if self.dashing:
                 rate = 1 if self.dash_ending else DASH_SHIMMER_TICKS
-                look_step = (self.tick // rate) % STEPS
+                dash_tint = self.tick // rate
                 # Not while paused: nothing is moving, so speed lines would be
                 # lying, and they cross the overlay besides.
                 if not self.paused:
                     self.draw_streaks(ink)
             self.blit_character(
-                self.character, look_step, self.player.frame,
+                self.character, step, self.player.frame,
                 self.accessory_frame(self.character, self.player.accessory_ticks,
                                      self.player.idle),
                 self.player.blit_pos(),
+                dash_tint,
             )
             self.draw_hud(ink, halo)
 
@@ -421,9 +433,15 @@ class Game:
             return 0
         return character.accessory.frame_at(ticks)
 
-    def blit_character(self, character, step, frame, accessory_frame, pos) -> None:
-        """Draw one character, accessory first so the head overlaps its base."""
-        sheet = characters.sheet_for(character, step)
+    def blit_character(self, character, step, frame, accessory_frame, pos,
+                       dash_tint=None) -> None:
+        """Draw one character, accessory first so the head overlaps its base.
+
+        `dash_tint` replaces the day/night sheet with a charged one -- the dash
+        overrides the sky rather than being lit by it.
+        """
+        sheet = (characters.sheet_for(character, step) if dash_tint is None
+                 else characters.dash_sheet_for(character, dash_tint))
         left, top = pos
         if character.accessory is not None:
             facings = sheet.accessory[accessory_frame]

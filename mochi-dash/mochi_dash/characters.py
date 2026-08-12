@@ -193,7 +193,69 @@ def accessory_look_for_step(character: Character, step: int) -> Look:
     return blend(character.accessory_day, character.accessory_night, step)
 
 
+# The dash's own colours.
+#
+# Strobing `sheet_for` across the day/night steps was the obvious way to do this
+# and the wrong one: half that ramp *is* the night look, so a dashing character
+# flashed to precisely the colours it wears after dark -- unreadable as anything
+# in daylight, and saying nothing at all at night. These tints sit outside the
+# ramp by construction. Nothing in a scene is ever this hot, so the dash reads as
+# the dash whatever the time of day, which is also why the step is not a
+# parameter below: being invincible overrides the sky rather than sitting under
+# it.
+#
+# Derived from the look a character already has rather than authored per
+# character, so a new character glows without being told how to.
+# Picked by measuring against every character at every step rather than by eye.
+# Amber was the first choice and the instructive one: charged onto an orange cat
+# it landed 21 away from Coco's ordinary daylight body, an invincibility that
+# only showed up on some of the cast. These three are the furthest from all of
+# them, and the test says so, so a fifth character cannot quietly collide with
+# one of these tints without failing.
+DASH_TINTS: tuple[Color, ...] = (
+    (255, 246, 176),  # gold
+    (255, 255, 255),  # white hot
+    (255, 130, 224),  # magenta
+)
+DASH_MIX = 0.72  # how far the body tones are pulled towards the tint
+
+
+def _pull(color: Color, tint: Color, amount: float) -> Color:
+    return tuple(round(c + (t - c) * amount) for c, t in zip(color, tint))
+
+
+def charged(look: Look, tint: Color) -> Look:
+    """A look pulled hot for the dash.
+
+    The outline is pulled far less than the body: at full mix the silhouette
+    dissolves into the glow and the character stops having a readable edge
+    against a bright sky, which is the one thing the outline is for.
+    """
+    return Look(
+        body=_pull(look.body, tint, DASH_MIX),
+        sheen=_pull(look.sheen, tint, DASH_MIX),
+        spec=_pull(look.spec, tint, DASH_MIX),
+        outline=_pull(look.outline, tint, DASH_MIX * 0.25),
+        accent=_pull(look.accent, tint, DASH_MIX),
+    )
+
+
 _sheets: dict[tuple[str, int], sprites.CharacterSheet] = {}
+_dash_sheets: dict[tuple[str, int], sprites.CharacterSheet] = {}
+
+
+def dash_sheet_for(character: Character, tint: int) -> sprites.CharacterSheet:
+    """The cached art for a charged character, one sheet per tint."""
+    key = (character.key, tint % len(DASH_TINTS))
+    if key not in _dash_sheets:
+        hot = DASH_TINTS[key[1]]
+        _dash_sheets[key] = sprites.CharacterSheet(
+            charged(character.day, hot),
+            character.poses,
+            character.accessory,
+            charged(character.accessory_day, hot),
+        )
+    return _dash_sheets[key]
 
 
 def sheet_for(character: Character, step: int) -> sprites.CharacterSheet:

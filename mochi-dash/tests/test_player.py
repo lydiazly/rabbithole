@@ -787,6 +787,47 @@ def test_the_dash_exit_needs_room_to_react():
     )
     # And room on top of the jump to see the obstacle and choose to make it.
     assert main.DASH_EXIT_REACTION > 0
+    # The rule cannot ask for more room than the screen has: obstacles appear at
+    # the right edge, so a clearance past the canvas width degenerates into "the
+    # screen is empty" and stops being a statement about reacting.
+    assert main.DASH_EXIT_CLEARANCE * wd.SPEED_MAX <= wd.WIDTH
+
+
+def test_the_dash_is_never_the_colour_of_nightfall():
+    """The dash has to be legible as the dash at any hour.
+
+    It used to strobe through the day/night steps, so half the flash *was* the
+    night look: at noon it read as dusk falling and at midnight it read as
+    nothing. Every dash tint must therefore be well clear of both of a
+    character's own looks, at every step of the ramp.
+    """
+    def distance(a, b):
+        return sum(abs(x - y) for x, y in zip(a, b))
+
+    for character in characters.CHARACTERS:
+        for tint in range(len(characters.DASH_TINTS)):
+            hot = characters.charged(character.day, characters.DASH_TINTS[tint])
+            for step in range(STEPS):
+                normal = characters.look_for_step(character, step)
+                gap = distance(hot.body, normal.body)
+                assert gap > 90, (
+                    f"{character.key} dash tint {tint} is only {gap} from its "
+                    f"step-{step} body colour"
+                )
+
+
+def test_a_charged_character_keeps_its_outline():
+    """Pulling every tone to the tint dissolves the silhouette.
+
+    The body goes hot; the outline has to stay dark enough to hold an edge
+    against a bright sky, which is the only job it has.
+    """
+    for character in characters.CHARACTERS:
+        for tint in range(len(characters.DASH_TINTS)):
+            hot = characters.charged(character.day, characters.DASH_TINTS[tint])
+            assert luminance(hot.outline) < luminance(hot.body), character.key
+            assert luminance(hot.body) - luminance(hot.outline) > 60, (
+                character.key, tint)
 
 
 def test_pausing_freezes_the_run_and_only_the_run(monkeypatch):
