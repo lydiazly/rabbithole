@@ -576,6 +576,29 @@ def test_text_stays_readable_against_the_sky(scene, step):
     assert {ink, halo} == {scene.day.text, scene.night.text}, (scene.key, step)
 
 
+TWO_TONE = [c for c in characters.CHARACTERS if c.day.accent != c.day.body]
+
+
+@pytest.mark.parametrize("scene,step", SCENE_STEPS, ids=SCENE_IDS)
+@pytest.mark.parametrize("character", TWO_TONE, ids=lambda c: c.key)
+def test_the_second_tone_region_stays_separable(character, scene, step):
+    """A two-tone character has a second large region to keep readable.
+
+    Checked separately from the body because it fails at the other end of the
+    ramp: Bobo's near-white muzzle measures 76 of 255 against snow's pale
+    daytime sky, where the brown outline is at 410, and by night the outline is
+    down to 132 while the muzzle is at 503. They hand off, and neither survives
+    the ramp alone.
+    """
+    sky = scenes.palette_for_step(scene, step).sky
+    look = characters.look_for_step(character, step)
+    best = max(
+        sum(abs(a - b) for a, b in zip(look.accent, sky)),
+        sum(abs(a - b) for a, b in zip(look.outline, sky)),
+    )
+    assert best > 200, (character.key, scene.key, step, best)
+
+
 @pytest.mark.parametrize("scene,step", SCENE_STEPS, ids=SCENE_IDS)
 def test_characters_stay_visible_against_every_sky(scene, step):
     """Either the fill or the edge has to separate the character from the sky.

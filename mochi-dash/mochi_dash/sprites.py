@@ -5,7 +5,7 @@ place:
 
     '.'  transparent      '#'  main tone
     'o'  secondary tone   '*'  highlight
-    '@'  outline
+    '@'  outline           '%'  second body tone, for two-tone characters
 
 The player's deformation lives here rather than in any simulation: the poses
 below *are* the squash and stretch, and `player.py` only decides which one is on
@@ -362,6 +362,121 @@ BIRD_POSES = {
     "squash3": BIRD_SQUASH3,
 }
 
+# -- the dog ---------------------------------------------------------------
+#
+# Coco's silhouette with a narrower chin, and a shiba's two-tone mask: tan above,
+# white muzzle below, drawn with the '%' second body tone. Big dark nose, small
+# mouth under it.
+
+DOG_ROUND = (
+    "....@@@@@@....",
+    "..@@oo####@@..",
+    ".@o**o######@.",
+    ".@ooo#######@.",
+    "@#ooo########@",
+    "@#oo@####@###@",
+    "@#o#@####@###@",
+    "@%%%%%%%%%%%%@",
+    "@%%%%%%%%%%%%@",
+    ".@%%%@@@@%%%@.",
+    ".@%%%@%%@%%%@.",
+    "..@@@@@@@@@@..",
+)
+
+DOG_ROUND_B = (
+    "....@@@@@@....",
+    "..@@oo####@@..",
+    ".@o**o######@.",
+    "@#ooo########@",
+    "@#oo@####@###@",
+    "@#o#@####@###@",
+    "@%%%%%%%%%%%%@",
+    "@%%%%%%%%%%%%@",
+    ".@%%%@@@@%%%@.",
+    ".@%%%@%%@%%%@.",
+    "..@@@@@@@@@@..",
+)
+
+DOG_STRETCH1 = (
+    "...@@@@@@...",
+    "..@@oo##@@..",
+    ".@o**o####@.",
+    ".@ooo#####@.",
+    "@#ooo######@",
+    "@#oo#######@",
+    "@#o########@",
+    "@#o@####@##@",
+    "@##@####@##@",
+    "@%%%%%%%%%%@",
+    "@%%%%%%%%%%@",
+    ".@%%@@@@%%@.",
+    ".@%%@%%@%%@.",
+    "..@@@@@@@@..",
+)
+
+DOG_STRETCH2 = (
+    "...@@@@...",
+    ".@@oo#@@@.",
+    ".@o**o##@.",
+    ".@ooo###@.",
+    "@#ooo####@",
+    "@#oo#####@",
+    "@#o######@",
+    "@#o@##@##@",
+    "@##@##@##@",
+    "@%%%%%%%%@",
+    "@%%%%%%%%@",
+    "@%%%%%%%%@",
+    "@%%@@@@%%@",
+    "@%%@%%@%%@",
+    "@%%%%%%%%@",
+    ".@%%%%%%@.",
+    "..@@@@@@..",
+)
+
+DOG_SQUASH1 = (
+    "....@@@@@@@@....",
+    "..@@oo######@@..",
+    ".@o**o########@.",
+    "@#ooo##########@",
+    "@#oo@######@###@",
+    "@#o#@######@###@",
+    "@%%%%%%%%%%%%%%@",
+    ".@%%%%@@@@%%%%@.",
+    ".@%%%%@%%@%%%%@.",
+    "..@@@@@@@@@@@@..",
+)
+
+DOG_SQUASH2 = (
+    "....@@@@@@@@@@....",
+    "..@oo##########@..",
+    ".@o**o##########@.",
+    "@#ooo@######@####@",
+    "@#o##@######@####@",
+    "@%%%%%%%%%%%%%%%%@",
+    ".@%%%%%@@@@%%%%%@.",
+    "..@@@@@@@@@@@@@@..",
+)
+
+DOG_SQUASH3 = (
+    ".....@@@@@@@@@@.....",
+    "..@o**o##########@..",
+    "@#ooo#@######@#####@",
+    "@%%%%%%%%%%%%%%%%%%@",
+    ".@%%%%%%@@@@%%%%%%@.",
+    "..@@@@@@@@@@@@@@@@..",
+)
+
+DOG_POSES = {
+    "round": DOG_ROUND,
+    "round_b": DOG_ROUND_B,
+    "stretch1": DOG_STRETCH1,
+    "stretch2": DOG_STRETCH2,
+    "squash1": DOG_SQUASH1,
+    "squash2": DOG_SQUASH2,
+    "squash3": DOG_SQUASH3,
+}
+
 # -- obstacles ------------------------------------------------------------
 
 # Three-pixel trunks. A one-pixel trunk is technically a cactus and reads on
@@ -493,6 +608,29 @@ EAR_LEFT = (
 # long upright hold would spend all of them holding still.
 EAR_IDLE = ((0, 14), (1, 8), (0, 16), (1, 5), (2, 6), (1, 5))
 
+# A shiba's ears are thicker and blunter than a cat's: a broad two-pixel tip on
+# a wide base, where Coco's taper to a single pixel.
+SHIBA_EAR_LEFT = (
+    (  # upright
+        "@@..",
+        "@#@.",
+        "@##@",
+        "@@@@",
+    ),
+    (  # half down
+        "....",
+        "@@@.",
+        "@##@",
+        "@@@@",
+    ),
+    (  # flicked
+        "....",
+        ".@@.",
+        "@##@",
+        "@@@@",
+    ),
+)
+
 EAR_W = 4
 EAR_H = 4
 # Rows of ear tucked behind the head, so it reads as attached rather than as a
@@ -565,7 +703,7 @@ PUFF = (
 )
 
 TRANSPARENT = "."
-VALID_CHARS = set(".#o*@")
+VALID_CHARS = set(".#o*@%")
 
 
 def sprite_size(rows) -> tuple[int, int]:
@@ -692,6 +830,7 @@ class Accessory:
 
 
 EARS = Accessory(EAR_LEFT, EAR_IDLE, sink=EAR_SINK)
+SHIBA_EARS = Accessory(SHIBA_EAR_LEFT, EAR_IDLE, sink=EAR_SINK)
 CREST = Accessory(TUFT, TUFT_IDLE, sink=1, paired=False)
 
 
@@ -700,7 +839,13 @@ class CharacterSheet:
 
     def __init__(self, look, poses, accessory: Accessory | None, accessory_look=None):
         def tones_of(l):
-            return {"@": l.outline, "#": l.body, "o": l.sheen, "*": l.spec}
+            return {
+                "@": l.outline,
+                "#": l.body,
+                "o": l.sheen,
+                "*": l.spec,
+                "%": l.accent,
+            }
 
         self.poses = {n: build(r, tones_of(look)) for n, r in poses.items()}
         # Both facings are built even for a centred accessory: it is two tiny
@@ -731,10 +876,11 @@ class WorldSheet:
             "o": palette.obstacle_dark,
             "@": palette.obstacle_dark,
             "*": palette.obstacle_dark,
+            "%": palette.obstacle,
         }
-        cloud = dict.fromkeys("#o*@", palette.cloud)
-        dust = dict.fromkeys("#o*@", palette.dust)
-        moon = dict.fromkeys("#o*@", palette.moon)
+        cloud = dict.fromkeys("#o*@%", palette.cloud)
+        dust = dict.fromkeys("#o*@%", palette.dust)
+        moon = dict.fromkeys("#o*@%", palette.moon)
 
         # Keyed by Obstacle.kind, so a new ground hazard is an entry here and a
         # spawn rule, not another branch in the draw code.
@@ -754,6 +900,7 @@ ALL_ART = {
     **{f"slime.{n}": r for n, r in SLIME_POSES.items()},
     **{f"cat.{n}": r for n, r in CAT_POSES.items()},
     **{f"bird.{n}": r for n, r in BIRD_POSES.items()},
+    **{f"dog.{n}": r for n, r in DOG_POSES.items()},
     "cactus_small": CACTUS_SMALL,
     "cactus_large": CACTUS_LARGE,
     "pine_small": PINE_SMALL,
@@ -766,4 +913,5 @@ ALL_ART = {
     **{f"puff.{i}": r for i, r in enumerate(PUFF)},
     **{f"ear.{i}": r for i, r in enumerate(EAR_LEFT)},
     **{f"tuft.{i}": r for i, r in enumerate(TUFT)},
+    **{f"shiba_ear.{i}": r for i, r in enumerate(SHIBA_EAR_LEFT)},
 }

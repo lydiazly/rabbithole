@@ -24,9 +24,9 @@ paddle angles it that way. Three lives.
 ## mochi-dash
 
 A window. Endless runner, named for how the characters move. The menu picks a
-character and a place to run through — Momo the slime, Coco the cat or Jojo the
-bird, in a desert or a snowfield; both choices are looks only, and neither
-changes the difficulty. Then `space` or `W` to jump, and again in mid-air for a
+character and a place to run through — Momo the slime, Coco the cat, Jojo the
+bird or Bobo the shiba, in a desert or a snowfield; both choices are looks
+only, and neither changes the difficulty. Then `space` or `W` to jump, and again in mid-air for a
 second jump worth about half as much height on top; the timing is forgiving,
 and the arc flattens at the top so clearing something is not a matter of one
 frame. `S` flattens you under low flyers, and `A`/`D` shift where you stand,

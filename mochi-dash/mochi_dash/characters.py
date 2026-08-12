@@ -17,12 +17,22 @@ from .palette import Color, blend
 
 @dataclass(frozen=True)
 class Look:
-    """The four tones the body art is drawn in."""
+    """The tones the body art is drawn in.
+
+    `accent` is a second body colour for two-tone characters -- Bobo's white
+    muzzle under a tan forehead. It defaults to the body, so a character with
+    one colour never mentions it and its art simply never uses that character.
+    """
 
     body: Color
     sheen: Color
     spec: Color
     outline: Color
+    accent: Color | None = None
+
+    def __post_init__(self):
+        if self.accent is None:
+            object.__setattr__(self, "accent", self.body)
 
 
 @dataclass(frozen=True)
@@ -139,7 +149,31 @@ JOJO = Character(
     ),
 )
 
-CHARACTERS = (MOMO, COCO, JOJO)
+# A shiba: tan above, white muzzle below. The yellow is lighter than Coco's
+# orange on purpose -- two warm characters that read the same would be a waste
+# of one of them.
+BOBO = Character(
+    key="bobo",
+    name="BOBO",
+    day=Look(
+        body=(240, 184, 104),
+        sheen=(255, 214, 152),
+        spec=(255, 246, 226),
+        outline=(138, 82, 34),
+        accent=(250, 248, 242),
+    ),
+    night=Look(
+        body=(214, 162, 96),
+        sheen=(240, 198, 142),
+        spec=(255, 238, 214),
+        outline=(110, 64, 26),
+        accent=(214, 220, 230),
+    ),
+    poses=sprites.DOG_POSES,
+    accessory=sprites.SHIBA_EARS,
+)
+
+CHARACTERS = (MOMO, COCO, JOJO, BOBO)
 DEFAULT = MOMO
 
 
