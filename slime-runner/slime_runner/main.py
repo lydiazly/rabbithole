@@ -47,9 +47,6 @@ SOUND_ROW = 2
 MENU_ROWS = (CHARACTER_ROW, SCENE_ROW, SOUND_ROW)
 SOUND_CHOICES = ("ON", "OFF")
 
-# Every hundred points, as arcade scoring has always done.
-POINT_MILESTONE = 100
-
 JUMP_BUFFER = 0.12  # a press just before landing still counts
 
 # After dying, the run ends by itself. The lockout is there because the key that
@@ -109,7 +106,6 @@ class Game:
         self.highscore = load_highscore()
         self.over_timer = 0.0
         self.jump_buffer = 0.0
-        self.milestone = 0
         self.state = MENU
 
     # -- state transitions ------------------------------------------------
@@ -136,7 +132,6 @@ class Game:
         self.slime.reset()
         self.puffs.clear()
         self.jump_buffer = 0.0
-        self.milestone = 0
 
     def start_run(self) -> None:
         self.go_to_title()
@@ -145,7 +140,6 @@ class Game:
     def end_run(self) -> None:
         self.state = GAME_OVER
         self.over_timer = 0.0
-        sfx.stop()  # a milestone blip over the death sound reads as a reward
         sfx.play("die")
         self.slime.splat()
         self.puffs.burst(self.slime.x, world.GROUND_Y, True)
@@ -266,11 +260,6 @@ class Game:
         if impact:
             self.puffs.burst(self.slime.x, world.GROUND_Y, impact >= HARD_LANDING)
         self.puffs.update(dt, self.world.speed)
-
-        reached = int(self.world.score) // POINT_MILESTONE
-        if reached > self.milestone:
-            self.milestone = reached
-            sfx.play("point")
 
         if self.world.collides(self.slime.hitbox()):
             self.end_run()

@@ -6,6 +6,12 @@
 # discovers them rather than listing them: drop in a new subdirectory with a
 # pyproject.toml and it shows up here with no edit.
 
+# SC2250 wants ${braces} on every expansion: an opt-in style rule with no
+# behavioural difference, declined deliberately so that `shellcheck -o all` stays
+# clean and the decision is recorded rather than rediscovered. A file-level
+# directive has to precede the first command, `set` included.
+# shellcheck disable=SC2250
+
 set -euo pipefail
 
 # Walk to the real script before looking around, because the games are found
@@ -15,6 +21,11 @@ set -euo pipefail
 #
 # readlink without -f, in a loop, because -f is GNU-only; the loop also handles
 # a chain of links and link targets written relative to their own directory.
+die() {
+    printf '%s\n' "$*" >&2
+    exit 1
+}
+
 script=${BASH_SOURCE[0]}
 while [[ -L $script ]]; do
     target=$(readlink "$script")
@@ -24,14 +35,16 @@ while [[ -L $script ]]; do
         script=$(cd -P "$(dirname "$script")" && pwd)/$target
     fi
 done
-cd "$(cd -P "$(dirname "$script")" && pwd)"
+# Resolved in two steps on purpose. Nested, a failure inside the substitution
+# yields an empty string, and `cd ""` returns 0 and stays where it is -- so a
+# broken resolution would silently run against whatever directory the user
+# happened to be in, which is the exact bug the symlink walk above exists to
+# prevent. Not even `set -e` catches it, because nothing failed.
+root=$(cd -P "$(dirname "$script")" && pwd) ||
+    die "Cannot resolve the directory of $script"
+cd "$root" || die "Cannot enter $root"
 
 self=$(basename "${BASH_SOURCE[0]}")
-
-die() {
-    printf '%s\n' "$*" >&2
-    exit 1
-}
 
 command -v uv >/dev/null ||
     die "uv is not installed -- see https://docs.astral.sh/uv/getting-started/installation/"
@@ -86,9 +99,10 @@ launch() {
 
 usage() {
     printf 'usage: %s [game]\n\nGames:\n' "$self"
-    local game
+    local game blurb
     for game in "${games[@]}"; do
-        printf '  %-14s %s\n' "$game" "$(description "$game")"
+        blurb=$(description "$game")
+        printf '  %-14s %s\n' "$game" "$blurb"
     done
 }
 
@@ -103,6 +117,7 @@ if (($# == 1)); then
             usage
             exit 0
             ;;
+        *) ;; # a game name; matched below
     esac
     for game in "${games[@]}"; do
         if [[ $game == "$1" ]]; then
@@ -119,7 +134,8 @@ fi
 
 printf '\n  rabbithole\n\n'
 for i in "${!games[@]}"; do
-    printf '  %d) %-14s %s\n' "$((i + 1))" "${games[i]}" "$(description "${games[i]}")"
+    blurb=$(description "${games[i]}")
+    printf '  %d) %-14s %s\n' "$((i + 1))" "${games[i]}" "$blurb"
 done
 printf '  q) quit\n\n'
 
@@ -127,6 +143,7 @@ read -rp '  pick: ' choice
 
 case $choice in
     q | Q | '') exit 0 ;;
+    *) ;; # a number or a name; matched below
 esac
 
 # Accept either the menu number or the name.

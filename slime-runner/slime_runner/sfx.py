@@ -24,7 +24,7 @@ BUFFER = 512
 
 # The sounds this module knows how to make. Named up front so a call site
 # can be checked against it without an audio device present.
-BUILT = ("jump", "double_jump", "point", "die", "blip")
+BUILT = ("jump", "double_jump", "die", "blip")
 
 _sounds: dict[str, pygame.mixer.Sound] = {}
 _ready = False
@@ -69,8 +69,6 @@ def init() -> None:
         # second jump so the two are distinguishable without looking.
         jump=_tone(430, 700, 90),
         double_jump=_tone(700, 980, 70, volume=0.24),
-        # Every hundred points, in the shape of an arcade milestone.
-        point=_tone(880, 1180, 70, volume=0.22, duty=0.25),
         # Falling and longer: the only sound that is bad news.
         die=_tone(420, 110, 380, volume=0.34),
         # Menu movement, kept quiet enough to hold a key down against.
