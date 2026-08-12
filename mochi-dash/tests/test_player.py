@@ -123,6 +123,15 @@ def test_hud_and_menu_strings_fit_the_canvas():
         assert pixelfont.text_width(text, scale) <= wd.WIDTH - 12, text
 
 
+def test_the_dash_meter_and_its_icon_stay_out_of_the_hotkeys():
+    """The icon pushed the bar right, and the bar had no room to spare given."""
+    used = (main.Game.HUD_MARGIN + pixelfont.GLYPH_W + 3
+            + main.Game.DASH_METER_W)
+    keys_start = wd.WIDTH - pixelfont.text_width("P PAUSE  R RETRY  M MENU") \
+        - main.Game.HUD_MARGIN
+    assert used < keys_start, f"meter ends at {used}, hotkeys start at {keys_start}"
+
+
 def test_the_two_hud_corners_cannot_collide():
     """They share a row now, one per end, and the score grows as you play.
 
@@ -817,11 +826,23 @@ def test_the_end_of_a_dash_says_so_in_more_than_one_way():
     """
     assert main.DASH_RECOVERY > 0
     assert main.DASH_OVER_PROMPT
-    # And the breather has to outlast the prompt telling you about it, or the
-    # words are gone before the quiet they explain.
-    assert main.DASH_RECOVERY * 60 > main.DASH_OVER_BLINK * 2, (
-        "the prompt cannot complete a blink"
-    )
+
+    # The prompt grows and then goes. Growing is what makes it catchable late:
+    # a blink is only visible if you were looking when it started, whereas
+    # something mid-growth still reads as having just appeared.
+    scales = [main.pop_scale(t / 60) for t in range(int(main.DASH_RECOVERY * 60))]
+    shown = [s for s in scales if s]
+    assert shown == sorted(shown), f"the pop is not monotonic: {shown}"
+    assert shown[0] < shown[-1], "it never actually grows"
+    assert scales[-1] == 0, "the prompt outstays the breather"
+    # And the quiet has to outlast the words, or there is no prepare in it.
+    pop = sum(seconds for _, seconds in main.DASH_OVER_POP)
+    assert pop < main.DASH_RECOVERY / 2, f"pop {pop}s of {main.DASH_RECOVERY}s"
+
+    # Every size it grows to has to fit the canvas.
+    for scale, _ in main.DASH_OVER_POP:
+        width = pixelfont.text_width(main.DASH_OVER_PROMPT, scale)
+        assert width <= wd.WIDTH - 12, f"scale {scale} is {width}px"
 
 
 def test_the_shake_settles_instead_of_leaving_the_screen_crooked():

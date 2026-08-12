@@ -61,6 +61,14 @@ _GLYPHS = {
     "!": ("..#..", "..#..", "..#..", ".....", "..#.."),
     "<": ("...#.", "..#..", ".#...", "..#..", "...#."),
     ">": (".#...", "..#..", "...#.", "..#..", ".#..."),
+    # Not a letter: the dash meter's icon. It lives in the font because the font
+    # already owns the per-colour, per-scale glyph cache and the shadow pass, and
+    # a five-by-five sprite that needed its own copy of all that would be a
+    # second implementation of the same thing.
+    # The legs go to the outer columns, matching the arms above them. Pulled in
+    # by one they read as a blob with a notch rather than a five-pointed star,
+    # which is about the limit of what five pixels can say.
+    "*": ("..#..", ".###.", "#####", ".###.", "#...#"),
 }
 
 _UNKNOWN = ("#####", "#####", "#####", "#####", "#####")

@@ -104,9 +104,14 @@ DASH_WARN_GAP_SCALE = 1.8
 # and the next thing is the player's problem. Two seconds until the next obstacle
 # appears at the right edge, and then the width of the canvas again before it
 # arrives, which is the breather the boost was borrowing against.
-DASH_RECOVERY = 2.0
+DASH_RECOVERY = 3.0
 DASH_OVER_PROMPT = "GET READY"
-DASH_OVER_BLINK = 12
+# Popped rather than blinked. A blink is only visible if you happen to be looking
+# when it starts; something that grows is still obviously mid-growth a moment
+# later, which is the whole problem with signalling the end of a dash. It grows
+# and then goes, leaving the rest of the breather quiet -- the empty screen says
+# the same thing, and words that outstayed the moment would just be furniture.
+DASH_OVER_POP = ((1, 0.07), (2, 0.07), (3, 0.90))  # scale, seconds held
 
 # Telling the player what a dash is for. Two words, blinked over the sky for the
 # first stretch of it, then out of the way -- long enough to be read on the first
@@ -147,6 +152,15 @@ MENU = "menu"
 TITLE = "title"
 PLAYING = "playing"
 GAME_OVER = "over"
+
+
+def pop_scale(elapsed: float) -> int:
+    """The prompt's size this far into the pop, or 0 once it is over."""
+    for scale, seconds in DASH_OVER_POP:
+        if elapsed < seconds:
+            return scale
+        elapsed -= seconds
+    return 0
 
 
 class Game:
@@ -564,9 +578,14 @@ class Game:
                 # about the ending was a change in something -- the strobe
                 # stopping, the meter going, the speed dropping -- and a player
                 # who was not watching for a change does not see one.
-                spent = DASH_RECOVERY - self.recovery
-                if int(spent * 60) // DASH_OVER_BLINK % 2 == 0:
-                    self.text(DASH_OVER_PROMPT, 34, ink, halo)
+                scale = pop_scale(DASH_RECOVERY - self.recovery)
+                if scale:
+                    # Kept centred as it grows: the text is drawn from its top
+                    # left, so a taller line would otherwise sink down the
+                    # screen instead of swelling in place.
+                    height = pixelfont.GLYPH_H * scale
+                    self.text(DASH_OVER_PROMPT, 34 + (15 - height) // 2,
+                              ink, halo, scale)
         elif self.state == TITLE:
             self.text(self.character.name, 20, ink, halo, 2)
             self.text("SPACE OR W - JUMP", 38, ink, halo)
@@ -588,7 +607,8 @@ class Game:
     MENU_PITCH = 11
 
     DASH_METER_W = 48
-    DASH_METER_Y = 14
+    DASH_METER_Y = 16
+    DASH_STAR_BLINK = 8
 
     def draw_streaks(self, ink) -> None:
         """Speed lines across the sky while dashing."""
@@ -618,6 +638,16 @@ class Game:
         # player is already looking at.
         x = self.HUD_MARGIN
         y = self.DASH_METER_Y
+        # A star, because an unlabelled bar in the corner of a first run is just
+        # a bar. Mario's is the one everybody has already learned, and the code
+        # was calling this a starman anyway. It flashes once the bar is full and
+        # stays lit for the dash, so one cycle teaches what the bar is counting
+        # towards without a word of tutorial.
+        ready = self.dashing or filled >= 1.0
+        if not ready or (self.tick // self.DASH_STAR_BLINK) % 2 == 0:
+            pixelfont.draw(self.canvas, "*", x + 1, y - 1, halo)
+            pixelfont.draw(self.canvas, "*", x, y - 2, ink)
+        x += pixelfont.GLYPH_W + 3
         self.canvas.fill(halo, (x, y + 1, self.DASH_METER_W, 2))
         self.canvas.fill(ink, (x, y, self.DASH_METER_W, 1))
         width = round(self.DASH_METER_W * max(0.0, min(1.0, filled)))
