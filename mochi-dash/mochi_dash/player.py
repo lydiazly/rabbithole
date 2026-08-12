@@ -77,6 +77,8 @@ LAND_SOFT = (("squash2", 3), ("squash1", 3))
 TAKEOFF = (("stretch2", 4), ("stretch1", 3))
 DUCK_IN = (("squash1", 2), ("squash2", 2))
 DUCK_OUT = (("squash1", 2), ("stretch1", 3))
+# Crumple, then hold the dead pose for as long as the banner is up.
+DEATH = (("squash2", 4), ("squash3", 6))
 
 HITBOX_INSET_X = 1
 HITBOX_INSET_Y = 1
@@ -137,6 +139,7 @@ class Player:
         self.on_ground = True
         self.ducking = False
         self.jumps_used = 0
+        self.dead = False
         self.frame = "round"
         self._clip = None
         self._clip_i = 0
@@ -187,9 +190,11 @@ class Player:
         self._play(TAKEOFF)
         return "air"
 
-    def splat(self) -> None:
-        """The game-over flop."""
-        self._play(LAND_HARD)
+    def die(self) -> None:
+        """Crumple and then stay down. Nothing animates after the clip."""
+        self.dead = True
+        self.ducking = False
+        self._play(DEATH)
 
     def update(self, dt: float, holding_jump: bool, ducking: bool, lateral: int,
                x_min: float, x_max: float) -> float:
@@ -243,8 +248,15 @@ class Player:
         those actions regardless -- restarting it meant a player jumping at any
         normal rate never reached the first twitch, and the ears sat dead for a
         whole run.
+
+        Never true once dead, or the ears would go on flicking over the X eyes.
         """
-        return self._clip is None and self.on_ground and not self.ducking
+        return (
+            not self.dead
+            and self._clip is None
+            and self.on_ground
+            and not self.ducking
+        )
 
     def _advance_frame(self) -> None:
         if self._clip is not None:
@@ -259,6 +271,9 @@ class Player:
             if self._clip is not None:
                 return
 
+        if self.dead:
+            self.frame = "dead"
+            return
         if self.ducking:
             self.frame = "squash3"
         elif not self.on_ground:

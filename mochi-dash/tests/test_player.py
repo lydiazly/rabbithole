@@ -819,3 +819,58 @@ def test_the_dash_prompt_gets_out_of_the_way():
     """Long enough to read on a first dash, short enough not to live there."""
     assert 0.0 < main.DASH_PROMPT_SECONDS < main.DASH_SECONDS / 2
     assert len(main.DASH_PROMPT.split()) == 2, "two words, as asked"
+
+
+# -- dying ------------------------------------------------------------------
+
+
+def test_death_crumples_and_then_stays_put():
+    """Classic-game death: a beat of collapse, then a pose that does not move.
+
+    The game-over banner sits for seconds, so anything still animating under it
+    reads as the character being fine.
+    """
+    p = make_player()
+    run(p, 20)
+    p.die()
+    frames = run(p, 60)
+    assert frames[0] != "dead", "should crumple first"
+    assert frames[-1] == "dead"
+    tail = frames[len(frames) // 2:]
+    assert set(tail) == {"dead"}, f"still animating: {sorted(set(tail))}"
+
+
+def test_a_dead_character_stops_twitching_its_ears():
+    p = make_player()
+    run(p, 20)
+    assert p.idle
+    p.die()
+    run(p, 60)
+    assert not p.idle, "ears would flick over the X eyes"
+
+
+def test_every_character_dies_with_the_same_face():
+    """X eyes, identical across the cast, like the duck squint."""
+    faces = {c.key: face_marks(c.poses["dead"]) for c in characters.CHARACTERS}
+    reference = faces[characters.DEFAULT.key]
+    assert len(reference) == 10, sorted(reference)  # two three-by-three crosses
+    assert len({y for _, y in reference}) == 3, "an X is three rows tall"
+    width = sprites.POSE_SIZES["dead"][0]
+    xs = {x for x, _ in reference}
+    assert {width - 1 - x for x in xs} == xs, "the pair should be symmetric"
+    for key, marks in faces.items():
+        assert marks == reference, key
+    assert reference != face_marks(characters.DEFAULT.poses["squash3"])
+
+
+def test_the_death_pose_reuses_the_flattest_silhouette():
+    """So its hitbox and its accessory anchors are ones already worked out.
+
+    A death pose with its own outline would need its own anchor and its own share
+    of the hitbox-air budget, for a pose the player only ever sees standing still.
+    """
+    for character in characters.CHARACTERS:
+        dead, flat = character.poses["dead"], character.poses["squash3"]
+        for y, (a, b) in enumerate(zip(dead, flat)):
+            for x, (ca, cb) in enumerate(zip(a, b)):
+                assert (ca == ".") == (cb == "."), (character.key, x, y)

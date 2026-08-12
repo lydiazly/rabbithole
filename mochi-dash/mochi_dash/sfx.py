@@ -29,7 +29,7 @@ FADE_IN_MS = 4
 
 # The sounds this module knows how to make. Named up front so a call site
 # can be checked against it without an audio device present.
-BUILT = ("jump", "double_jump", "dash", "smash", "die", "blip")
+BUILT = ("jump", "double_jump", "dash", "smash", "power_down", "die", "blip")
 
 _sounds: dict[str, pygame.mixer.Sound] = {}
 _ready = False
@@ -97,6 +97,8 @@ def init() -> None:
         # Flattening something. Short, low and a narrow duty, which is as close
         # to a crunch as a square wave gets.
         smash=_tone(760, 190, 90, volume=0.30, duty=0.12),
+        # The dash running out: the rising sweep that earned it, backwards.
+        power_down=_tone(1100, 380, 200, volume=0.24, duty=0.25),
         # Falling and longer: the only sound that is bad news.
         die=_tone(420, 110, 380, volume=0.34),
         # Menu movement, kept quiet enough to hold a key down against.

@@ -38,5 +38,5 @@ taller ones, clusters and flyers as it speeds up, spacing them a little tighter
 as it goes. Scoring pays for what an obstacle asked of you: a point for a
 cactus and two for a tall one, two for a flyer low enough to duck, and nothing
 at all for one that sails past overhead. Every twenty points earns a **dash** —
-a few seconds of running faster and flattening whatever is in the way instead of
-dying to it. Your best run is saved.
+a few seconds of running much faster and flattening whatever is in the way
+instead of dying to it, with a blinking warning before it drops you back. Your best run is saved.

@@ -128,6 +128,18 @@ SQUASH3 = (
     "@@@@@@@@@@@@@@@@@@@@",
 )
 
+# Held from the moment of the crash. X eyes are the oldest shorthand in the
+# medium for this, and they fit because the silhouette is the flattest pose --
+# so the accessory anchors and the hitbox are the ones already worked out.
+DEAD = (
+    ".....@@@@@@@@@@.....",
+    "..@o**o##########@..",
+    "@#ooo@#@####@#@####@",
+    "@#####@######@#####@",
+    "@####@#@####@#@####@",
+    "@@@@@@@@@@@@@@@@@@@@",
+)
+
 SLIME_POSES = {
     "round": ROUND,
     "round_b": ROUND_B,
@@ -136,6 +148,7 @@ SLIME_POSES = {
     "squash1": SQUASH1,
     "squash2": SQUASH2,
     "squash3": SQUASH3,
+    "dead": DEAD,
 }
 
 # -- the cat ---------------------------------------------------------------
@@ -254,6 +267,15 @@ CAT_SQUASH3 = (
     "..@@@@@@@@@@@@@@@@..",
 )
 
+CAT_DEAD = (
+    ".....@@@@@@@@@@.....",
+    "..@o**o##########@..",
+    "@#ooo@#@####@#@####@",
+    "@#####@######@#####@",
+    ".@###@#@####@#@###@.",
+    "..@@@@@@@@@@@@@@@@..",
+)
+
 CAT_POSES = {
     "round": CAT_ROUND,
     "round_b": CAT_ROUND_B,
@@ -262,6 +284,7 @@ CAT_POSES = {
     "squash1": CAT_SQUASH1,
     "squash2": CAT_SQUASH2,
     "squash3": CAT_SQUASH3,
+    "dead": CAT_DEAD,
 }
 
 # -- the bird --------------------------------------------------------------
@@ -377,6 +400,15 @@ BIRD_SQUASH3 = (
     "@@@@@@@@@@@@@@@@@@@@",
 )
 
+BIRD_DEAD = (
+    ".....@@@@@@@@@@.....",
+    ".@*o##############@.",
+    "@####@#@####@#@####@",
+    "@#####@######@#####@",
+    "@####@#@####@#@####@",
+    "@@@@@@@@@@@@@@@@@@@@",
+)
+
 BIRD_POSES = {
     "round": BIRD_ROUND,
     "round_b": BIRD_ROUND_B,
@@ -385,6 +417,7 @@ BIRD_POSES = {
     "squash1": BIRD_SQUASH1,
     "squash2": BIRD_SQUASH2,
     "squash3": BIRD_SQUASH3,
+    "dead": BIRD_DEAD,
 }
 
 # -- the dog ---------------------------------------------------------------
@@ -492,6 +525,15 @@ DOG_SQUASH3 = (
     "..@@@@@@@@@@@@@@@@..",
 )
 
+DOG_DEAD = (
+    ".....@@@@@@@@@@.....",
+    "..@o**o##########@..",
+    "@#ooo@#@####@#@####@",
+    "@%%%%%@%%%%%%@%%%%%@",
+    ".@%%%@%@%%%%@%@%%%@.",
+    "..@@@@@@@@@@@@@@@@..",
+)
+
 DOG_POSES = {
     "round": DOG_ROUND,
     "round_b": DOG_ROUND_B,
@@ -500,6 +542,7 @@ DOG_POSES = {
     "squash1": DOG_SQUASH1,
     "squash2": DOG_SQUASH2,
     "squash3": DOG_SQUASH3,
+    "dead": DOG_DEAD,
 }
 
 # -- obstacles ------------------------------------------------------------

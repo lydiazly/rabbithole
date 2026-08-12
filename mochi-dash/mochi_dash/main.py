@@ -61,7 +61,7 @@ JUMP_BUFFER = 0.12  # a press just before landing still counts
 DASH_EVERY = 20  # points
 DASH_COOLDOWN = 12.0
 DASH_SECONDS = 5.0
-DASH_BOOST = 1.35
+DASH_BOOST = 1.6
 DASH_SHIMMER_TICKS = 3  # frames per palette step, while dashing
 
 # The dash runs on a timer but must not end into a wall. Gaps spawned before it
@@ -71,6 +71,13 @@ DASH_SHIMMER_TICKS = 3  # frames per palette step, while dashing
 # the player could not have avoided, so the dash holds past zero, still smashing
 # and so still clearing the way, until there is room to react.
 DASH_EXIT_CLEARANCE = 0.40  # seconds of travel at the restored speed
+
+# The last stretch of a dash, where it starts telling you it is about to go: the
+# shimmer doubles its rate and the meter blinks. Ending it silently was the one
+# part of the dash the player could not see coming, and it is the part that
+# matters, because the next obstacle stops being furniture.
+DASH_WARN_SECONDS = 1.5
+DASH_WARN_BLINK = 6
 
 # Telling the player what a dash is for. Two words, blinked over the sky for the
 # first stretch of it, then out of the way -- long enough to be read on the first
@@ -183,7 +190,7 @@ class Game:
         self.over_timer = 0.0
         sfx.play("die")
         self.end_dash()
-        self.player.splat()
+        self.player.die()
         self.puffs.burst(self.player.x, world.GROUND_Y, True)
         if self.score > self.highscore:
             self.highscore = self.score
@@ -205,10 +212,15 @@ class Game:
         self.world.boost = DASH_BOOST
         sfx.play("dash")
 
+    @property
+    def dash_ending(self) -> bool:
+        return self.dashing and self.dash_left < DASH_WARN_SECONDS
+
     def end_dash(self) -> None:
         self.dash_left = 0.0
         self.dash_on = False
         self.world.boost = 1.0
+        sfx.play("power_down")
 
     def exit_is_clear(self) -> bool:
         """Whether there is room ahead to react once the boost drops."""
@@ -310,7 +322,7 @@ class Game:
                 if self.over_timer >= GAME_OVER_HOLD:
                     self.go_to_title()
                     return
-            # The idle breathe and the tail of the splat clip both keep running.
+            # The idle breathe and the tail of the death clip both keep running.
             self.player.update(dt, False, False, 0, X_MIN, X_MAX)
             self.puffs.update(dt, 0.0)
             return
@@ -386,7 +398,8 @@ class Game:
             # out of machinery that was already there.
             look_step = step
             if self.dashing:
-                look_step = (self.tick // DASH_SHIMMER_TICKS) % STEPS
+                rate = 1 if self.dash_ending else DASH_SHIMMER_TICKS
+                look_step = (self.tick // rate) % STEPS
                 # Not while paused: nothing is moving, so speed lines would be
                 # lying, and they cross the overlay besides.
                 if not self.paused:
@@ -491,6 +504,8 @@ class Game:
                 1.0, 1.0 - self.dash_cooldown / DASH_COOLDOWN
             )
             filled = min(owed, waited)
+        if self.dash_ending and (self.tick // DASH_WARN_BLINK) % 2:
+            return  # blinked out: the dash is about to end
         x = (world.WIDTH - self.DASH_METER_W) // 2
         y = self.DASH_METER_Y
         self.canvas.fill(halo, (x, y + 1, self.DASH_METER_W, 2))
