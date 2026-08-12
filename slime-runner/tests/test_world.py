@@ -103,21 +103,47 @@ def test_obstacle_sprites_fit_over_their_hitboxes():
         assert box[0] <= sw and box[1] <= sh
 
 
-def test_flyers_arrive_early_in_the_ramp_and_get_common_by_the_end():
-    """Pins the ducking mechanic to the speed ramp, not to absolute speeds.
+def speed_at(t: float) -> float:
+    """Speed at a given point along the difficulty ramp."""
+    return wd.SPEED_START + t * wd.SPEED_RANGE
 
-    The floor and span used to be absolute, so retuning the speed moved both the
-    first flyer and its eventual rate without anything failing.
-    """
+
+def test_a_run_opens_with_nothing_but_single_small_cacti():
+    """The newcomer's runway: for a while the only thing to learn is the jump."""
+    small, large, cluster = wd.ground_weights(wd.SPEED_START)
+    assert small > 0 and large == 0.0 and cluster == 0.0
     assert wd.air_chance(wd.SPEED_START) == 0.0
-    quarter = wd.SPEED_START + 0.25 * wd.SPEED_RANGE
-    assert wd.air_chance(quarter) > 0.0, "ducking shows up too late in a run"
-    assert wd.air_chance(wd.SPEED_MAX) >= 0.7 * wd.AIR_CHANCE_MAX
+    assert wd.low_flyer_share(wd.SPEED_START) == 0.0
 
 
-def test_air_chance_never_decreases_with_speed():
-    chances = [wd.air_chance(s) for s in range(int(wd.SPEED_START), int(wd.SPEED_MAX))]
-    assert chances == sorted(chances)
+def test_hazards_unlock_in_a_deliberate_order():
+    """Tall, then wide, then something that has to be ducked."""
+    order = [wd.AIR_FROM, wd.LARGE_FROM, wd.LOW_FLYER_FROM, wd.CLUSTER_FROM,
+             wd.TRIPLE_FROM]
+    assert order == sorted(order), order
+    assert order[-1] < 1.0, "the last hazard never actually arrives"
+
+
+def test_every_hazard_is_in_play_by_top_speed():
+    _, large, cluster = wd.ground_weights(wd.SPEED_MAX)
+    assert large > 0.0 and cluster > 0.0
+    assert wd.air_chance(wd.SPEED_MAX) > 0.0
+    assert wd.low_flyer_share(wd.SPEED_MAX) > 0.0
+
+
+def test_difficulty_never_decreases_with_speed():
+    speeds = range(int(wd.SPEED_START), int(wd.SPEED_MAX))
+    for curve in (wd.air_chance, wd.low_flyer_share):
+        values = [curve(s) for s in speeds]
+        assert values == sorted(values), curve.__name__
+    for i in (1, 2):  # large, then cluster
+        weights = [wd.ground_weights(s)[i] for s in speeds]
+        assert weights == sorted(weights), i
+
+
+def test_ducking_is_never_demanded_before_it_is_unlocked():
+    below = speed_at(wd.LOW_FLYER_FROM) - 1.0
+    assert wd.low_flyer_share(below) == 0.0
 
 
 def test_top_speed_still_leaves_time_to_react():
@@ -126,11 +152,38 @@ def test_top_speed_still_leaves_time_to_react():
     assert window > 1.1
 
 
-def test_no_flyers_before_the_speed_floor():
+def test_no_flyers_before_they_unlock():
     w = RecordingWorld(random.Random(2))
-    while w.speed < wd.AIR_SPEED_FLOOR:
+    floor = speed_at(wd.AIR_FROM)
+    while w.speed < floor:
         w.update(DT)
         assert not any(ob.kind == "flyer" for ob in w.obstacles)
+
+
+def test_the_opening_of_a_real_run_spawns_only_small_cacti():
+    """The weights are one thing; what actually reaches the screen is another."""
+    w = wd.World(random.Random(11))
+    unlock_speed = speed_at(min(wd.LARGE_FROM, wd.AIR_FROM))
+    while w.speed < unlock_speed:
+        w.update(DT)
+        assert all(ob.kind == "small" for ob in w.obstacles), [
+            ob.kind for ob in w.obstacles
+        ]
+
+
+def test_stars_hold_still_while_the_clouds_drift():
+    """The sky's two layers must not be confused for each other.
+
+    Anything that moves reads as near scenery; the stars and the moon are the
+    only things meant to sit further off than the hills.
+    """
+    w = wd.World(random.Random(5))
+    stars, clouds = list(w.stars), [c[0] for c in w.clouds]
+    for _ in range(FIVE_MINUTES):
+        w.update(DT)
+    assert w.stars == stars
+    # Vacuous otherwise: a world that scrolled nothing would also pass.
+    assert [c[0] for c in w.clouds] != clouds
 
 
 def test_obstacles_are_retired_once_offscreen():

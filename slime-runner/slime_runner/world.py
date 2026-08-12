@@ -36,20 +36,57 @@ JUMP_AIRTIME = 0.60
 GAP_MARGIN = 20.0
 GAP_RANGE = (0.75, 1.5)  # seconds of travel
 
-# Flyers are keyed to fractions of the speed ramp rather than to absolute speeds.
-# Pinned to absolute values, retuning the speed silently moves both when ducking
-# first appears and how common it ever gets — slowing the game down by a fifth
-# pushed the first flyer from ten seconds into twenty-two and halved its rate at
-# top speed, quietly sidelining the whole mechanic.
-AIR_SPEED_FLOOR = SPEED_START + 0.18 * SPEED_RANGE  # no flyers until some pace
-AIR_SPEED_SPAN = 1.10 * SPEED_RANGE
+# Difficulty is measured as progress along the speed ramp, not as wall-clock time
+# or as absolute speed. Everything below is a fraction of it, so retuning the
+# speed moves the whole curve together instead of silently resequencing it.
+def difficulty(speed: float) -> float:
+    """0.0 at the start of a run, 1.0 once the speed has topped out."""
+    return min(1.0, max(0.0, (speed - SPEED_START) / SPEED_RANGE))
+
+
+def unlocked(t: float, start: float, weight: float) -> float:
+    """Zero until `start`, then ramping to `weight` at the end of the ramp."""
+    if t <= start:
+        return 0.0
+    return weight * (t - start) / (1.0 - start)
+
+
+# A run opens with nothing but single small cacti, so there is a stretch of it in
+# which the only thing to learn is the jump. Each further hazard unlocks later and
+# grows in, reaching roughly the mix the game used to start with.
+LARGE_FROM = 0.22
+LARGE_WEIGHT = 0.65
+CLUSTER_FROM = 0.40
+CLUSTER_WEIGHT = 0.55
+TRIPLE_FROM = 0.65  # before this a cluster is two cacti, never three
+
+AIR_FROM = 0.18
 AIR_CHANCE_MAX = 0.35
+# Flyers arrive high, where they only threaten a jump. The low ones that have to
+# be ducked are a separate, later unlock: ducking is the one control that cannot
+# be discovered by pressing jump harder.
+LOW_FLYER_FROM = 0.35
+LOW_FLYER_SHARE = 0.6
 
 
 def air_chance(speed: float) -> float:
-    """Probability that the next spawn is a flyer, at this speed."""
-    ramp = max(0.0, (speed - AIR_SPEED_FLOOR) / AIR_SPEED_SPAN)
-    return min(AIR_CHANCE_MAX, ramp * AIR_CHANCE_MAX)
+    """Probability that the next spawn is a flyer."""
+    return unlocked(difficulty(speed), AIR_FROM, AIR_CHANCE_MAX)
+
+
+def low_flyer_share(speed: float) -> float:
+    """Of the flyers spawned, the fraction that sit low enough to demand a duck."""
+    return unlocked(difficulty(speed), LOW_FLYER_FROM, LOW_FLYER_SHARE)
+
+
+def ground_weights(speed: float) -> tuple[float, float, float]:
+    """Relative weights of (small, large, cluster) for the next ground spawn."""
+    t = difficulty(speed)
+    return (
+        1.0,
+        unlocked(t, LARGE_FROM, LARGE_WEIGHT),
+        unlocked(t, CLUSTER_FROM, CLUSTER_WEIGHT),
+    )
 
 # Bottom edge above the ground. Low clears a ducked slime (6 tall) and catches a
 # standing one (12); high is only a threat mid-jump.
@@ -63,12 +100,15 @@ SMALL_BOX = (3, 11)
 LARGE_BOX = (5, 16)
 CLUSTER_GAP = 8
 
-DAY_LENGTH = 10000.0  # canvas units per full day/night cycle, about a minute
+# Canvas units per full day/night cycle: about 30 s of play at top speed, 75 s at
+# the opening crawl. Much shorter and the sky starts visibly strobing.
+DAY_LENGTH = 6500.0
 
 CLOUD_SPEED = 0.15
-STAR_SPEED = 0.08
 FAR_SPEED = 0.25
 NEAR_SPEED = 0.5
+# Stars and the moon have no speed at all. They are the only things meant to read
+# as further away than the hills, and any drift makes them look like near scenery.
 
 HORIZON_BAND = 14  # pixels of lighter sky just above the ground
 
@@ -119,9 +159,8 @@ class World:
             [r.uniform(0, WIDTH * 1.4), r.randrange(6, 40), r.randrange(2)]
             for _ in range(5)
         ]
-        self.stars = [
-            [r.uniform(0, WIDTH), r.randrange(3, 46)] for _ in range(16)
-        ]
+        # Fixed, so whole pixels and no wrap-around bookkeeping.
+        self.stars = [(r.randrange(WIDTH), r.randrange(3, 46)) for _ in range(16)]
         self.far = [[r.uniform(0, WIDTH * 1.3), r.randrange(22, 40)] for _ in range(6)]
         self.near = [[r.uniform(0, WIDTH * 1.3), r.randrange(22, 34)] for _ in range(7)]
         self.speckles = [
@@ -159,7 +198,6 @@ class World:
             )
 
         self._scroll_layer(self.clouds, CLOUD_SPEED, dt, 14.0)
-        self._scroll_layer(self.stars, STAR_SPEED, dt, 2.0)
         self._scroll_layer(self.far, FAR_SPEED, dt, 42.0)
         self._scroll_layer(self.near, NEAR_SPEED, dt, 36.0)
         self._scroll_layer(self.speckles, 1.0, dt, 6.0)
@@ -167,7 +205,8 @@ class World:
     def _spawn(self) -> None:
         x = WIDTH + 8.0
         if self.rng.random() < air_chance(self.speed):
-            clear = AIR_LOW_CLEAR if self.rng.random() < 0.6 else AIR_HIGH_CLEAR
+            low = self.rng.random() < low_flyer_share(self.speed)
+            clear = AIR_LOW_CLEAR if low else AIR_HIGH_CLEAR
             w, h = AIR_BOX
             self.obstacles.append(
                 Obstacle(x, GROUND_Y - clear - h, w, h, "flyer",
@@ -175,16 +214,20 @@ class World:
             )
             return
 
-        roll = self.rng.random()
-        if roll < 0.45:
+        small_w, large_w, cluster_w = ground_weights(self.speed)
+        roll = self.rng.random() * (small_w + large_w + cluster_w)
+        if roll < small_w:
             w, h = SMALL_BOX
             self.obstacles.append(Obstacle(x, GROUND_Y - h, w, h, "small"))
-        elif roll < 0.75:
+        elif roll < small_w + large_w:
             w, h = LARGE_BOX
             self.obstacles.append(Obstacle(x, GROUND_Y - h, w, h, "large"))
         else:
             w, h = SMALL_BOX
-            for i in range(self.rng.choice((2, 3))):
+            triple = (
+                difficulty(self.speed) > TRIPLE_FROM and self.rng.random() < 0.5
+            )
+            for i in range(3 if triple else 2):
                 self.obstacles.append(
                     Obstacle(x + i * CLUSTER_GAP, GROUND_Y - h, w, h, "small")
                 )
@@ -202,8 +245,8 @@ class World:
 
         if is_night(step):
             canvas.blit(sheet.moon, MOON_POS)
-            for x, y in self.stars:
-                canvas.set_at((int(x) % WIDTH, y), STAR)
+            for star in self.stars:
+                canvas.set_at(star, STAR)
 
         for x, y, which in self.clouds:
             canvas.blit(sheet.clouds[which], (int(x), y))

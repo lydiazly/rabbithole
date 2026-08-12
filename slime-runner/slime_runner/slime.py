@@ -13,18 +13,19 @@ import math
 
 from .sprites import SLIME_SIZES
 
-# Rising is gentler than falling: the arc hangs at the top and lands with weight.
+# Snap up, drift down. This inverts the usual platformer convention of falling
+# harder than you rise, which reads as weight but, at this jump height, mostly
+# reads as being dragged back down before you have arrived. Getting to the top
+# quickly and hanging on the way down leaves the arc under the player's control
+# for longer, which matters more here because the second jump is spent mid-flight.
 #
-# Height and airtime are raised together on purpose. Simply increasing the launch
-# speed would buy clearance at the cost of a longer, floatier hang, and airtime is
-# what the spawn-gap floor in world.py is keyed to — the obstacles would have to
-# spread out to stay fair and the fast half of a run would go empty. Scaling
-# gravity by the same factor gives a jump that peaks at 40 px instead of 31, in
-# 0.53 s rather than 0.55.
-GRAVITY_UP = 950.0
-GRAVITY_DOWN = 1425.0
-JUMP_SPEED = 283.0
-JUMP_CUT_SPEED = 100.0  # releasing early while rising clamps to this, giving a hop
+# Rise 0.23 s and fall 0.30 s, still peaking at 40 px and still totalling 0.53 s —
+# airtime is what world.py keys the spawn-gap floor to, so the total is held
+# fixed and only its distribution changes.
+GRAVITY_UP = 1510.0
+GRAVITY_DOWN = 890.0
+JUMP_SPEED = 348.0
+JUMP_CUT_SPEED = 120.0  # releasing early while rising clamps to this, giving a hop
 
 # The mid-air second jump, expressed in height rather than in speed.
 #
@@ -47,11 +48,14 @@ LATERAL_SPEED = 85.0
 # about 257; a clipped hop at well under half that.
 HARD_LANDING = 160.0
 
-# Airborne pose thresholds, in vertical speed. Set well inside the launch speed of
-# 210: pitched near it, the tall pose only shows for the handful of ticks the
-# takeoff clip already covers, and the jump reads as round the whole way up.
-RISING_FAST = -40.0
-FALLING_FAST = 60.0
+# How long either side of the apex the slime holds its round pose, before and
+# after which it is stretched. A duration rather than a velocity: pinned to
+# absolute speeds these do not survive a gravity retune, and the faster rise above
+# would have cut the round window from four ticks to under two, leaving the whole
+# arc reading as one continuous stretch.
+APEX_ROUND_TIME = 0.045
+RISING_FAST = -GRAVITY_UP * APEX_ROUND_TIME
+FALLING_FAST = GRAVITY_DOWN * APEX_ROUND_TIME
 
 IDLE_TICKS = 26  # per idle frame, so the pair cycles a little under a second
 
