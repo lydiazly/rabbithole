@@ -8,7 +8,7 @@ its own directory.
 ./play snake     # start one directly
 ```
 
-In every game, `R` plays again and `Q` quits.
+`R` plays again and `Q` quits, in all of them.
 
 ## snake
 
@@ -23,7 +23,11 @@ paddle angles it that way. Three lives.
 
 ## slime-runner
 
-A window. Endless runner: `space` or `W` jumps, and pressing again in mid-air
-adds about half as much height again — the timing is forgiving. `S` flattens the
-slime under low flyers, and `A`/`D` shift where it stands — further back buys
-reaction time. It only gets faster; your best run is saved.
+A window. Endless runner. Pick a character — a slime or an orange cat, which
+differ in looks only — then `space` or `W` to jump, and again in mid-air for a
+second jump worth about half as much height on top; the timing is forgiving. `S`
+flattens you under low flyers, and `A`/`D` shift where you stand, further back
+buying reaction time. `C` goes back to the character screen.
+
+It opens easy — nothing but single cacti while you find the jump — and adds
+taller ones, clusters and flyers as it speeds up. Your best run is saved.

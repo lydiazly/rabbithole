@@ -188,6 +188,43 @@ FLYER_DOWN = (
     "###.......###",
 )
 
+# -- ears -----------------------------------------------------------------
+#
+# Drawn *behind* the body, so only the part clearing the head shows and the base
+# never paints over the head's own outline. Authored as the left ear; the right
+# one is this mirrored.
+EAR_LEFT = (
+    (  # upright
+        "@..",
+        "@@.",
+        "@o@",
+        "@@@",
+    ),
+    (  # half down
+        "...",
+        "@@.",
+        "@o@",
+        "@@@",
+    ),
+    (  # flicked
+        "...",
+        ".@.",
+        "@o@",
+        "@@@",
+    ),
+)
+
+# Idle twitch, as (frame index, ticks). Kept short deliberately: the gaps between
+# jumps in a real run are only a few dozen ticks, and a cycle that opens with a
+# long upright hold would spend all of them holding still.
+EAR_IDLE = ((0, 14), (1, 8), (0, 16), (1, 5), (2, 6), (1, 5))
+
+EAR_W = 3
+EAR_H = 4
+# Rows of ear tucked behind the head, so it reads as attached rather than as a
+# hat balanced on top.
+EAR_SINK = 1
+
 # -- scenery and effects --------------------------------------------------
 
 CLOUD_BIG = (
@@ -267,15 +304,39 @@ def build(rows, colors) -> pygame.Surface:
     return surf
 
 
-class SpriteSheet:
-    """Every sprite, coloured for one day/night step."""
+def mirrored(rows):
+    return tuple(row[::-1] for row in rows)
 
-    def __init__(self, palette: Palette):
+
+def _cap_span(rows) -> tuple[int, int]:
+    """First and last filled column of a pose's top row."""
+    top = rows[0]
+    filled = [i for i, char in enumerate(top) if char != TRANSPARENT]
+    return filled[0], filled[-1]
+
+
+def _ear_anchor(rows) -> tuple[int, int, int]:
+    """(left x, right x, y) for a pose's ears, relative to its top-left corner.
+
+    Derived from the art rather than hand-authored per pose: the ears have to sit
+    on the head's crown, and the crown moves and widens across all seven frames.
+    """
+    first, last = _cap_span(rows)
+    return first - EAR_W + 1, last, EAR_SINK - EAR_H
+
+
+EAR_ANCHORS = {name: _ear_anchor(rows) for name, rows in SLIME_FRAMES.items()}
+
+
+class SpriteSheet:
+    """Every sprite, coloured for one character at one day/night step."""
+
+    def __init__(self, palette: Palette, look):
         body = {
-            "@": palette.outline,
-            "#": palette.body,
-            "o": palette.sheen,
-            "*": palette.spec,
+            "@": look.outline,
+            "#": look.body,
+            "o": look.sheen,
+            "*": look.spec,
         }
         obstacle = {
             "#": palette.obstacle,
@@ -288,6 +349,9 @@ class SpriteSheet:
         moon = dict.fromkeys("#o*@", (246, 244, 222))
 
         self.slime = {n: build(r, body) for n, r in SLIME_FRAMES.items()}
+        self.ears = tuple(
+            (build(rows, body), build(mirrored(rows), body)) for rows in EAR_LEFT
+        )
         self.cactus_small = build(CACTUS_SMALL, obstacle)
         self.cactus_large = build(CACTUS_LARGE, obstacle)
         self.flyer = (build(FLYER_UP, obstacle), build(FLYER_DOWN, obstacle))
@@ -296,14 +360,17 @@ class SpriteSheet:
         self.puff = tuple(build(rows, dust) for rows in PUFF)
 
 
-_sheets: dict[int, SpriteSheet] = {}
+_sheets: dict[tuple[str, int], SpriteSheet] = {}
 
 
-def sheet_for_step(step: int, palette: Palette) -> SpriteSheet:
-    """Return the cached sprite sheet for a day/night step, building it once."""
-    if step not in _sheets:
-        _sheets[step] = SpriteSheet(palette)
-    return _sheets[step]
+def sheet_for(character, step: int, palette: Palette) -> SpriteSheet:
+    """Return the cached sprite sheet for a character at a day/night step."""
+    from .characters import look_for_step
+
+    key = (character.key, step)
+    if key not in _sheets:
+        _sheets[key] = SpriteSheet(palette, look_for_step(character, step))
+    return _sheets[key]
 
 
 # Frame sizes are needed for hitboxes and placement before any sheet is built,
@@ -321,4 +388,5 @@ ALL_ART = {
     "cloud_small": CLOUD_SMALL,
     "moon": MOON,
     **{f"puff.{i}": r for i, r in enumerate(PUFF)},
+    **{f"ear.{i}": r for i, r in enumerate(EAR_LEFT)},
 }
