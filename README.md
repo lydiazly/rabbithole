@@ -21,14 +21,14 @@ Terminal. Slide the paddle with `←`/`→` or `A`/`D`, launch with `space`, and
 clear all four rows of bricks. Hitting the ball with the outer third of the
 paddle angles it that way. Three lives.
 
-## slime-runner
+## mochi-dash
 
-A window. Endless runner. The menu picks a character and a place to run
-through — a slime or an orange cat, a desert or a snowfield; both are looks
-only, and neither changes the difficulty. Then `space` or `W` to jump, and
-again in mid-air for a second jump worth about half as much height on top; the
-timing is forgiving, and the arc flattens at the top so clearing something is
-not a matter of one frame. `S` flattens you under low flyers, and `A`/`D` shift
+A window. Endless runner, named for how the characters move. The menu picks a
+character and a place to run through — a slime or an orange cat, a desert or a
+snowfield; both are looks only, and neither changes the difficulty. Then
+`space` or `W` to jump, and again in mid-air for a second jump worth about half
+as much height on top; the timing is forgiving, and the arc flattens at the top
+so clearing something is not a matter of one frame. `S` flattens you under low flyers, and `A`/`D` shift
 where you stand, further back buying reaction time. `M` reopens the menu,
 which also switches the sound off.
 

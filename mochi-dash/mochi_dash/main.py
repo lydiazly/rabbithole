@@ -17,7 +17,7 @@ import pygame
 
 from . import characters, effects, pixelfont, scenes, sfx, world
 from .palette import step_at
-from .slime import HARD_LANDING, Slime, idle_body_frame
+from .player import HARD_LANDING, Player, idle_body_frame
 
 SCALE = 3
 DT = 1.0 / 60.0
@@ -90,13 +90,13 @@ class Game:
         self.screen = pygame.display.set_mode(
             (world.WIDTH * SCALE, world.HEIGHT * SCALE)
         )
-        pygame.display.set_caption("Slime Runner")
+        pygame.display.set_caption("Mochi Dash")
         self.clock = pygame.time.Clock()
         self.canvas = pygame.Surface((world.WIDTH, world.HEIGHT))
 
         self.scene = scenes.DEFAULT
         self.world = world.World(self.scene, self.rng)
-        self.slime = Slime(START_X, world.GROUND_Y)
+        self.player = Player(START_X, world.GROUND_Y)
         self.puffs = effects.Puffs()
 
         self.character = characters.DEFAULT
@@ -123,13 +123,13 @@ class Game:
         self.state = MENU
         self.preview_tick = 0
         self.world.use_scene(self.previewed_scene)
-        self.slime.reset()
+        self.player.reset()
         self.puffs.clear()
 
     def go_to_title(self) -> None:
         self.state = TITLE
         self.world.use_scene(self.scene)
-        self.slime.reset()
+        self.player.reset()
         self.puffs.clear()
         self.jump_buffer = 0.0
 
@@ -141,8 +141,8 @@ class Game:
         self.state = GAME_OVER
         self.over_timer = 0.0
         sfx.play("die")
-        self.slime.splat()
-        self.puffs.burst(self.slime.x, world.GROUND_Y, True)
+        self.player.splat()
+        self.puffs.burst(self.player.x, world.GROUND_Y, True)
         score = int(self.world.score)
         if score > self.highscore:
             self.highscore = score
@@ -233,7 +233,7 @@ class Game:
                     self.go_to_title()
                     return
             # The idle breathe and the tail of the splat clip both keep running.
-            self.slime.update(dt, False, False, 0, X_MIN, X_MAX)
+            self.player.update(dt, False, False, 0, X_MIN, X_MAX)
             self.puffs.update(dt, 0.0)
             return
 
@@ -244,7 +244,7 @@ class Game:
 
         self.jump_buffer = max(0.0, self.jump_buffer - dt)
         if self.jump_buffer > 0.0:
-            kind = self.slime.jump()
+            kind = self.player.jump()
             if kind:
                 self.jump_buffer = 0.0
             if kind == "ground":
@@ -253,15 +253,15 @@ class Game:
                 sfx.play("double_jump")
                 # A puff under its feet in mid-air is the only signal that the
                 # second jump has been spent.
-                self.puffs.burst(self.slime.x, self.slime.y, False)
+                self.puffs.burst(self.player.x, self.player.y, False)
 
         self.world.update(dt)
-        impact = self.slime.update(dt, holding_jump, ducking, lateral, X_MIN, X_MAX)
+        impact = self.player.update(dt, holding_jump, ducking, lateral, X_MIN, X_MAX)
         if impact:
-            self.puffs.burst(self.slime.x, world.GROUND_Y, impact >= HARD_LANDING)
+            self.puffs.burst(self.player.x, world.GROUND_Y, impact >= HARD_LANDING)
         self.puffs.update(dt, self.world.speed)
 
-        if self.world.collides(self.slime.hitbox()):
+        if self.world.collides(self.player.hitbox()):
             self.end_run()
 
     # -- drawing ----------------------------------------------------------
@@ -280,10 +280,10 @@ class Game:
         else:
             self.puffs.draw(self.canvas, scenery)
             self.blit_character(
-                self.character, step, self.slime.frame,
-                self.accessory_frame(self.character, self.slime.accessory_ticks,
-                                     self.slime.idle),
-                self.slime.blit_pos(),
+                self.character, step, self.player.frame,
+                self.accessory_frame(self.character, self.player.accessory_ticks,
+                                     self.player.idle),
+                self.player.blit_pos(),
             )
             self.draw_hud(ink, halo)
 
@@ -344,7 +344,7 @@ class Game:
     MENU_PITCH = 11
 
     def draw_menu(self, step, ink, halo) -> None:
-        self.text("SLIME RUNNER", 16, ink, halo, 2)
+        self.text("MOCHI DASH", 16, ink, halo, 2)
 
         rows = (
             ("CHARACTER", self.previewed_character.name),
@@ -388,7 +388,7 @@ def main() -> None:
         pygame.quit()
         raise SystemExit(
             f"Could not open a game window: {exc}\n"
-            "Slime Runner needs a graphical display; over SSH, forward X11 or run "
+            "Mochi Dash needs a graphical display; over SSH, forward X11 or run "
             "it locally."
         ) from exc
     try:

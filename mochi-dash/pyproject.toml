@@ -1,12 +1,12 @@
 [project]
-name = "slime-runner"
+name = "mochi-dash"
 version = "0.1.0"
-description = "An endless runner starring a squash-and-stretch jelly slime"
+description = "An endless runner with a squash-and-stretch mochi bounce"
 requires-python = ">=3.10"
 dependencies = ["pygame-ce>=2.5"]
 
 [project.scripts]
-slime-runner = "slime_runner.main:main"
+mochi-dash = "mochi_dash.main:main"
 
 [dependency-groups]
 dev = ["pytest>=8.0"]

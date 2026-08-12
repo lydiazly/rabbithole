@@ -1,4 +1,4 @@
-"""Landing dust: a three-frame puff sprite, played once where the slime hit.
+"""Landing dust: a three-frame puff sprite, played once where the player hit.
 
 The physics-particle version this replaces looked wrong once everything else was
 on a pixel grid — a cloud of independently falling dots reads as smoke, not as a

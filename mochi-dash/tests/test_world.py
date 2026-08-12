@@ -4,9 +4,9 @@ import random
 
 import pytest
 
-from slime_runner import slime as sl
-from slime_runner import scenes, sprites
-from slime_runner import world as wd
+from mochi_dash import player as pl
+from mochi_dash import scenes, sprites
+from mochi_dash import world as wd
 
 DT = 1.0 / 60.0
 FIVE_MINUTES = int(300 / DT)
@@ -24,15 +24,15 @@ class RecordingWorld(wd.World):
         self.spawns.append((self.distance, self.speed))
 
 
-def settled(ducking: bool = False) -> sl.Slime:
-    s = sl.Slime(0.0, wd.GROUND_Y)
+def settled(ducking: bool = False) -> pl.Player:
+    s = pl.Player(0.0, wd.GROUND_Y)
     for _ in range(int(1.0 / DT)):
         s.update(DT, False, ducking, 0, -1e6, 1e6)
     return s
 
 
 def measured_airtime() -> float:
-    s = sl.Slime(0.0, wd.GROUND_Y)
+    s = pl.Player(0.0, wd.GROUND_Y)
     s.jump()
     t = 0.0
     while not s.on_ground and t < 5.0:
@@ -59,7 +59,7 @@ def test_spawn_gaps_always_leave_room_to_land_and_jump_again():
 
 def test_a_full_jump_clears_the_tallest_obstacle_at_top_speed():
     tallest = wd.LARGE_BOX[1]
-    s = sl.Slime(0.0, wd.GROUND_Y)
+    s = pl.Player(0.0, wd.GROUND_Y)
     s.jump()
     clear_time = 0.0
     widest = 0
@@ -75,14 +75,14 @@ def test_a_full_jump_clears_the_tallest_obstacle_at_top_speed():
 def test_low_flyers_demand_a_duck_and_admit_one():
     w, h = wd.AIR_BOX
     flyer = wd.Obstacle(-w / 2, wd.GROUND_Y - wd.AIR_LOW_CLEAR - h, w, h, "flyer")
-    assert sl.rects_overlap(settled().hitbox(), flyer.rect())
-    assert not sl.rects_overlap(settled(ducking=True).hitbox(), flyer.rect())
+    assert pl.rects_overlap(settled().hitbox(), flyer.rect())
+    assert not pl.rects_overlap(settled(ducking=True).hitbox(), flyer.rect())
 
 
 def test_high_flyers_are_safe_at_ground_level():
     w, h = wd.AIR_BOX
     flyer = wd.Obstacle(-w / 2, wd.GROUND_Y - wd.AIR_HIGH_CLEAR - h, w, h, "flyer")
-    assert not sl.rects_overlap(settled().hitbox(), flyer.rect())
+    assert not pl.rects_overlap(settled().hitbox(), flyer.rect())
 
 
 def test_ducking_takes_a_few_frames_so_it_cannot_be_a_reflex():
@@ -91,7 +91,7 @@ def test_ducking_takes_a_few_frames_so_it_cannot_be_a_reflex():
     flyer = wd.Obstacle(-w / 2, wd.GROUND_Y - wd.AIR_LOW_CLEAR - h, w, h, "flyer")
     s = settled()
     s.update(DT, False, True, 0, -1e6, 1e6)
-    assert sl.rects_overlap(s.hitbox(), flyer.rect())
+    assert pl.rects_overlap(s.hitbox(), flyer.rect())
 
 
 def test_obstacle_sprites_fit_over_their_hitboxes():
@@ -149,7 +149,7 @@ def test_ducking_is_never_demanded_before_it_is_unlocked():
 
 
 def test_top_speed_still_leaves_time_to_react():
-    """Reaction window: an obstacle appearing at the right edge versus the slime."""
+    """Reaction window: an obstacle appearing at the right edge versus the player."""
     window = (wd.WIDTH - 42.0) / wd.SPEED_MAX
     assert window > 1.1
 

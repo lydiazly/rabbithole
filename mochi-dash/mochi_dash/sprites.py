@@ -7,9 +7,9 @@ place:
     'o'  secondary tone   '*'  highlight
     '@'  outline
 
-The slime's deformation lives here rather than in any simulation: the seven
-frames below *are* the squash and stretch, and `slime.py` only decides which one
-is on screen. They are anchored bottom-centre, so a wide flat frame spreads along
+The player's deformation lives here rather than in any simulation: the poses
+below *are* the squash and stretch, and `player.py` only decides which one is on
+screen. They are anchored bottom-centre, so a wide flat frame spreads along
 the ground instead of sinking through it.
 """
 
@@ -35,7 +35,7 @@ ROUND = (
 )
 
 # One pixel squatter than ROUND. Alternating the two is the whole idle animation,
-# and it is enough to keep a standing slime from looking like a dead sprite.
+# and it is enough to keep a standing character from looking like a dead sprite.
 ROUND_B = (
     "....@@@@@@....",
     "..@@oo####@@..",
@@ -111,7 +111,7 @@ SQUASH2 = (
     "@@@@@@@@@@@@@@@@@@",
 )
 
-# Also the held pose while ducking: the flattest the slime ever gets.
+# Also the held pose while ducking: the flattest pose there is.
 SQUASH3 = (
     ".....@@@@@@@@@@.....",
     "..@o**o##########@..",

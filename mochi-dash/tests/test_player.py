@@ -1,11 +1,11 @@
-"""Tests for the art, the frame animator and the slime's motion. No window needed."""
+"""Tests for the art, the characters and the player's motion. No window needed."""
 
 import pytest
 
-from slime_runner import characters, main, pixelfont, scenes, sfx, sprites
-from slime_runner import slime as sl
-from slime_runner import world as wd
-from slime_runner.palette import STEPS, is_night, luminance, step_at
+from mochi_dash import characters, main, pixelfont, scenes, sfx, sprites
+from mochi_dash import player as pl
+from mochi_dash import world as wd
+from mochi_dash.palette import STEPS, is_night, luminance, step_at
 
 SCENE_STEPS = [(s, st) for s in scenes.SCENES for st in range(STEPS)]
 SCENE_IDS = [f"{s.key}-{st}" for s, st in SCENE_STEPS]
@@ -14,12 +14,12 @@ DT = 1.0 / 60.0
 GROUND = 84.0
 
 
-def make_slime() -> sl.Slime:
-    return sl.Slime(0.0, GROUND)
+def make_player() -> pl.Player:
+    return pl.Player(0.0, GROUND)
 
 
-def run(s: sl.Slime, ticks: int, ducking: bool = False, holding: bool = False):
-    """Advance the slime, returning the frame shown on each tick."""
+def run(s: pl.Player, ticks: int, ducking: bool = False, holding: bool = False):
+    """Advance the player, returning the frame shown on each tick."""
     frames = []
     for _ in range(ticks):
         s.update(DT, holding, ducking, 0, -1e6, 1e6)
@@ -96,7 +96,7 @@ def test_no_two_glyphs_are_identical():
 
 UI_LINES = [
     ("HI 00000  00000", 1),
-    ("SLIME RUNNER", 2),
+    ("MOCHI DASH", 2),
     ("SPACE OR W - JUMP", 1),
     ("JUMP AGAIN IN AIR TO DOUBLE", 1),
     ("S - DUCK   A/D - SHIFT", 1),
@@ -229,14 +229,14 @@ def test_an_accessory_must_use_every_frame_it_declares():
 
 def test_the_body_never_counts_as_idle_mid_action():
     """What suppresses the twitch is `idle`; the clock underneath keeps running."""
-    s = make_slime()
+    s = make_player()
     run(s, 40)
     assert s.idle
     s.jump()
     while not s.on_ground:
         s.update(DT, True, False, 0, -1e6, 1e6)
         assert not s.idle
-    ducked = make_slime()
+    ducked = make_player()
     run(ducked, 30, ducking=True)
     assert not ducked.idle
     # The clock advances every tick regardless, or a player who jumps at a normal
@@ -304,12 +304,12 @@ def test_world_art_is_shared_between_characters_not_copied_per_character():
 
 
 def test_a_hard_landing_plays_the_full_squash_and_overshoot():
-    s = make_slime()
+    s = make_player()
     s.jump()
     impact = 0.0
     while not s.on_ground:
         impact = s.update(DT, True, False, 0, -1e6, 1e6)
-    assert impact >= sl.HARD_LANDING
+    assert impact >= pl.HARD_LANDING
     frames = [s.frame] + run(s, 16)
     # Flattest first, then part-way back, then past round, then settled.
     assert frames.index("squash3") < frames.index("squash1")
@@ -318,7 +318,7 @@ def test_a_hard_landing_plays_the_full_squash_and_overshoot():
 
 
 def test_a_clipped_hop_lands_softly_without_the_deepest_frame():
-    s = make_slime()
+    s = make_player()
     s.jump()
     while not s.on_ground:
         s.update(DT, False, False, 0, -1e6, 1e6)  # released immediately
@@ -328,13 +328,13 @@ def test_a_clipped_hop_lands_softly_without_the_deepest_frame():
 
 
 def test_takeoff_stretches_before_the_airborne_pose_takes_over():
-    s = make_slime()
+    s = make_player()
     s.jump()
     assert s.frame == "stretch2"
 
 
 def test_the_apex_is_round():
-    s = make_slime()
+    s = make_player()
     s.jump()
     prev_vy = s.vy
     apex_frame = None
@@ -354,7 +354,7 @@ def jump_flight(second_jump_at=None):
 
     Returns (peak height above the ground, airtime, highest sprite top edge).
     """
-    s = make_slime()
+    s = make_player()
     s.jump()
     peak, top, tick = 0.0, GROUND, 0
     while not s.on_ground:
@@ -367,7 +367,7 @@ def jump_flight(second_jump_at=None):
     return peak, tick * DT, top
 
 
-APEX_TICK = round(sl.JUMP_SPEED / sl.GRAVITY_UP / DT)
+APEX_TICK = round(pl.JUMP_SPEED / pl.GRAVITY_UP / DT)
 
 
 def test_a_single_jump_clears_the_tallest_obstacle_with_room_to_spare():
@@ -378,12 +378,12 @@ def test_a_single_jump_clears_the_tallest_obstacle_with_room_to_spare():
 def test_the_apex_is_a_plateau_not_a_point():
     """Blunting the top of the arc is what stops it feeling like a clip.
 
-    With one gravity the slime is at full height for a single tick, and grazing
+    With one gravity the player is at full height for a single tick, and grazing
     the top of an obstacle reads as unfair. Gravity is cut in a band around zero
     vertical speed so the peak is somewhere it arrives rather than passes
     through.
     """
-    s = make_slime()
+    s = make_player()
     s.jump()
     heights = []
     while not s.on_ground:
@@ -402,8 +402,8 @@ def test_the_hang_is_paid_for_out_of_the_airtime_budget():
 
 def test_rise_and_speed_are_inverses_across_the_hang_band():
     """The second jump clamps its apex with these; a mismatch leaks the clamp."""
-    for height in (0.0, 1.0, sl._HANG_RISE, sl._HANG_RISE + 0.5, 20.0, 60.0):
-        assert sl.rise_from_speed(sl.speed_for_rise(height)) == pytest.approx(
+    for height in (0.0, 1.0, pl._HANG_RISE, pl._HANG_RISE + 0.5, 20.0, 60.0):
+        assert pl.rise_from_speed(pl.speed_for_rise(height)) == pytest.approx(
             height, abs=1e-6), height
 
 
@@ -424,7 +424,7 @@ def test_double_jump_timing_is_forgiving():
     assert min(tapped, apex) / max(tapped, apex) > 0.9
 
 
-def test_the_slime_never_leaves_the_top_of_the_canvas():
+def test_the_player_never_leaves_the_top_of_the_canvas():
     """Swept over every tick of the ascent, not sampled.
 
     The worst case is not the apex press but a press partway up, which banks the
@@ -438,18 +438,18 @@ def test_the_slime_never_leaves_the_top_of_the_canvas():
 def test_no_press_timing_beats_the_apex_ceiling():
     for when in range(0, APEX_TICK + 12):
         peak, _, _ = jump_flight(second_jump_at=when)
-        assert peak <= sl.MAX_APEX + 1.0, (when, peak)
+        assert peak <= pl.MAX_APEX + 1.0, (when, peak)
 
 
 def test_only_two_jumps_are_available_per_flight():
-    s = make_slime()
+    s = make_player()
     assert s.jump() == "ground"
     assert s.jump() == "air"
     assert s.jump() is None
 
 
 def test_landing_restores_the_second_jump():
-    s = make_slime()
+    s = make_player()
     s.jump()
     s.jump()
     while not s.on_ground:
@@ -459,7 +459,7 @@ def test_landing_restores_the_second_jump():
 
 def test_a_second_jump_never_slows_an_ascent():
     for when in range(0, APEX_TICK + 1, 3):
-        s = make_slime()
+        s = make_player()
         s.jump()
         for _ in range(when):
             s.update(DT, True, False, 0, -1e6, 1e6)
@@ -469,13 +469,13 @@ def test_a_second_jump_never_slows_an_ascent():
 
 
 def test_idle_alternates_between_the_two_resting_frames():
-    s = make_slime()
-    frames = set(run(s, sl.IDLE_TICKS * 3))
+    s = make_player()
+    frames = set(run(s, pl.IDLE_TICKS * 3))
     assert frames == {"round", "round_b"}
 
 
 def test_ducking_settles_on_the_flattest_frame_and_springs_back():
-    s = make_slime()
+    s = make_player()
     run(s, 4)
     down = run(s, 12, ducking=True)
     assert down[-1] == "squash3"
@@ -485,9 +485,9 @@ def test_ducking_settles_on_the_flattest_frame_and_springs_back():
 
 
 def test_ducking_shortens_and_widens_the_hitbox():
-    standing = make_slime()
+    standing = make_player()
     run(standing, 12)
-    ducked = make_slime()
+    ducked = make_player()
     run(ducked, 12, ducking=True)
 
     _, _, w_up, h_up = standing.hitbox()
@@ -497,14 +497,14 @@ def test_ducking_shortens_and_widens_the_hitbox():
 
 
 def test_hitbox_sits_on_the_ground():
-    s = make_slime()
+    s = make_player()
     run(s, 12)
     _, top, _, height = s.hitbox()
     assert top + height == pytest.approx(GROUND)
 
 
 def test_lateral_movement_is_clamped():
-    s = make_slime()
+    s = make_player()
     for _ in range(600):
         s.update(DT, False, False, 1, -50.0, 40.0)
     assert s.x == pytest.approx(40.0)

@@ -1,4 +1,4 @@
-"""The slime: jump physics, and a frame-clip animator in place of a simulation.
+"""The player: jump physics, and a frame-clip animator in place of a simulation.
 
 Nothing here computes a shape. The seven poses live in `sprites.py`; this module
 only decides which one is on screen this tick. Squash and stretch are authored
@@ -23,11 +23,11 @@ GRAVITY_DOWN = 1270.0
 JUMP_SPEED = 420.0
 JUMP_CUT_SPEED = 110.0  # releasing early while rising clamps to this, giving a hop
 
-# Apex hang: gravity is cut while the slime is moving slowly either way, which
+# Apex hang: gravity is cut while the player is moving slowly either way, which
 # blunts the top of the arc towards a circle instead of a parabola's point.
 #
 # A pointed apex is where clipping the top of an obstacle feels unfair -- you
-# are only at full height for an instant. Here the slime stays within about 7 px
+# are only at full height for an instant. Here the player stays within about 7 px
 # of its peak for a fifth of a second, so the top of the jump is somewhere you
 # arrive rather than somewhere you pass through.
 #
@@ -43,7 +43,7 @@ APEX_HANG_FACTOR = 0.45
 # does nothing or actively slows the ascent, so the height is only there for a
 # frame-perfect apex press. Adding to the velocity is forgiving but unbounded in
 # height: a press halfway up keeps most of the rise already banked *and* gets the
-# full addition, which sends the slime clean off the top of the screen.
+# full addition, which sends the player clean off the top of the screen.
 #
 # Working in height fixes both. The second jump tops the flight up by
 # DOUBLE_JUMP_RISE and the apex is clamped to MAX_APEX, so every press from
@@ -58,7 +58,7 @@ LATERAL_SPEED = 85.0
 # about 257; a clipped hop at well under half that.
 HARD_LANDING = 160.0
 
-# How long either side of the apex the slime holds its round pose, before and
+# How long either side of the apex the player holds its round pose, before and
 # after which it is stretched. A duration rather than a velocity: pinned to
 # absolute speeds these do not survive a gravity retune, and the faster rise above
 # would have cut the round window from four ticks to under two, leaving the whole
@@ -122,8 +122,8 @@ def rects_overlap(a, b) -> bool:
     return ax < bx + bw and bx < ax + aw and ay < by + bh and by < ay + ah
 
 
-class Slime:
-    """The player character. `x` is its centre, `y` is its feet."""
+class Player:
+    """The running character. `x` is its centre, `y` is its feet."""
 
     def __init__(self, x: float, ground_y: float):
         self.ground_y = ground_y

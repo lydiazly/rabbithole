@@ -220,7 +220,7 @@ __marimo__/
 .streamlit/secrets.toml
 
 # ---------------------------------------------------------------------------
-# Slime Runner runtime state
+# Mochi Dash runtime state
 # ---------------------------------------------------------------------------
 
 # Written beside the package whenever a run beats the stored best.

@@ -1,6 +1,6 @@
 """The scrolling world, in low-resolution canvas pixels.
 
-The slime never moves forward — the world moves past it — so `distance` is the
+The player never moves forward — the world moves past it — so `distance` is the
 single source of truth for score, difficulty and the day/night phase.
 
 Scenery is drawn with plain shape calls rather than authored sprites: at canvas
@@ -14,7 +14,7 @@ from dataclasses import dataclass
 
 import pygame
 
-from . import slime as slime_mod
+from . import player as player_mod
 from . import sprites
 from .palette import is_night
 
@@ -88,7 +88,7 @@ def ground_weights(speed: float) -> tuple[float, float, float]:
         unlocked(t, CLUSTER_FROM, CLUSTER_WEIGHT),
     )
 
-# Bottom edge above the ground. Low clears a ducked slime (6 tall) and catches a
+# Bottom edge above the ground. Low clears a ducked player (6 tall) and catches a
 # standing one (12); high is only a threat mid-jump.
 AIR_LOW_CLEAR = 8
 AIR_HIGH_CLEAR = 30
@@ -254,7 +254,7 @@ class World:
                 )
 
     def collides(self, box) -> bool:
-        return any(slime_mod.rects_overlap(box, ob.rect()) for ob in self.obstacles)
+        return any(player_mod.rects_overlap(box, ob.rect()) for ob in self.obstacles)
 
     # -- drawing ----------------------------------------------------------
 
