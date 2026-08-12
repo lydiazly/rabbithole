@@ -36,6 +36,7 @@ RIGHT_KEYS = (pygame.K_RIGHT, pygame.K_d)
 QUIT_KEYS = (pygame.K_ESCAPE, pygame.K_q)
 RESTART_KEYS = (pygame.K_r,)
 MENU_KEYS = (pygame.K_m,)
+PAUSE_KEYS = (pygame.K_p,)
 PICK_KEYS = (pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4)
 ROW_UP_KEYS = (pygame.K_UP, pygame.K_w)
 ROW_DOWN_KEYS = (pygame.K_DOWN, pygame.K_s)
@@ -70,6 +71,20 @@ DASH_SHIMMER_TICKS = 3  # frames per palette step, while dashing
 # the player could not have avoided, so the dash holds past zero, still smashing
 # and so still clearing the way, until there is room to react.
 DASH_EXIT_CLEARANCE = 0.40  # seconds of travel at the restored speed
+
+# Telling the player what a dash is for. Two words, blinked over the sky for the
+# first stretch of it, then out of the way -- long enough to be read on the first
+# dash of a first run, short enough not to sit on top of the game after that.
+DASH_PROMPT = "SMASH THROUGH"
+DASH_PROMPT_SECONDS = 1.6
+DASH_PROMPT_BLINK = 14  # frames lit, frames dark: about two blinks a second
+
+# Speed lines. Their positions come out of the tick, so the whole effect is five
+# fills and nothing to store, reset or tidy up when the dash ends. The rows dodge
+# the HUD strip and the row the prompt is printed on, or they read as stray
+# underlines beneath the text.
+DASH_STREAK_ROWS = (20, 27, 45, 52, 63)
+DASH_STREAK_LEN = 11
 
 # After dying, the run ends by itself. The lockout is there because the key that
 # killed you is often still coming: without it the banner can be gone before it
@@ -120,6 +135,7 @@ class Game:
         self.over_timer = 0.0
         self.jump_buffer = 0.0
         self.tick = 0
+        self.paused = False
         self.score = 0
         self.toward_dash = 0
         self.dash_left = 0.0
@@ -151,6 +167,7 @@ class Game:
         self.player.reset()
         self.puffs.clear()
         self.jump_buffer = 0.0
+        self.paused = False
         self.score = 0
         self.toward_dash = 0
         self.dash_left = 0.0
@@ -228,6 +245,10 @@ class Game:
                 return False
             if event.key in MENU_KEYS and self.state != MENU:
                 self.go_to_menu()
+            elif event.key in PAUSE_KEYS and self.state == PLAYING:
+                self.paused = not self.paused
+            elif self.paused:
+                continue  # everything else is inert while held
             elif self.state == MENU:
                 self.menu_key(event.key)
             elif self.state == TITLE:
@@ -277,6 +298,8 @@ class Game:
             self.world.use_scene(self.previewed_scene)
 
     def update(self, dt: float) -> None:
+        if self.paused:
+            return
         if self.state == MENU:
             self.preview_tick += 1
             return
@@ -364,6 +387,10 @@ class Game:
             look_step = step
             if self.dashing:
                 look_step = (self.tick // DASH_SHIMMER_TICKS) % STEPS
+                # Not while paused: nothing is moving, so speed lines would be
+                # lying, and they cross the overlay besides.
+                if not self.paused:
+                    self.draw_streaks(ink)
             self.blit_character(
                 self.character, look_step, self.player.frame,
                 self.accessory_frame(self.character, self.player.accessory_ticks,
@@ -407,8 +434,19 @@ class Game:
         self.text(score, 6, ink, halo, x=world.WIDTH - pixelfont.text_width(score) - 6)
 
         if self.state == PLAYING:
-            self.text("R RETRY  M MENU", 6, ink, halo, x=6)
+            self.text("P PAUSE  R RETRY  M MENU", 6, ink, halo, x=6)
             self.draw_dash_meter(ink, halo)
+            if self.paused:
+                self.text("PAUSED", 34, ink, halo, 2)
+                self.text("P  RESUME", 52, ink, halo)
+            elif self.dashing:
+                # Blinked off the dash's own elapsed time, not the global tick:
+                # phased against the tick the prompt starts wherever it happens
+                # to land, and can open on its dark half.
+                elapsed = DASH_SECONDS - self.dash_left
+                lit = int(elapsed * 60) // DASH_PROMPT_BLINK % 2 == 0
+                if elapsed < DASH_PROMPT_SECONDS and lit:
+                    self.text(DASH_PROMPT, 34, ink, halo)
         elif self.state == TITLE:
             self.text(self.character.name, 20, ink, halo, 2)
             self.text("SPACE OR W - JUMP", 38, ink, halo)
@@ -430,6 +468,14 @@ class Game:
     MENU_PITCH = 11
 
     DASH_METER_W = 48
+    DASH_METER_Y = 14
+
+    def draw_streaks(self, ink) -> None:
+        """Speed lines across the sky while dashing."""
+        span = world.WIDTH + 40
+        for i, y in enumerate(DASH_STREAK_ROWS):
+            x = span - (self.tick * (7 + i * 2) + i * 61) % span
+            self.canvas.fill(ink, (x, y, DASH_STREAK_LEN, 1))
 
     def draw_dash_meter(self, ink, halo) -> None:
         """Either how much dash is left, or how much is owed before the next one.
@@ -438,19 +484,15 @@ class Game:
         side, and a second widget on a 300-pixel canvas is a widget too many.
         """
         if self.dashing:
-            label, filled = "DASH", self.dash_left / DASH_SECONDS
+            filled = self.dash_left / DASH_SECONDS
         else:
-            label = ""
             owed = min(1.0, self.toward_dash / DASH_EVERY)
             waited = 1.0 if DASH_COOLDOWN <= 0 else min(
                 1.0, 1.0 - self.dash_cooldown / DASH_COOLDOWN
             )
             filled = min(owed, waited)
         x = (world.WIDTH - self.DASH_METER_W) // 2
-        if label:
-            self.text(label, 6, ink, halo,
-                      x=(world.WIDTH - pixelfont.text_width(label)) // 2)
-        y = 13 if label else 7
+        y = self.DASH_METER_Y
         self.canvas.fill(halo, (x, y + 1, self.DASH_METER_W, 2))
         self.canvas.fill(ink, (x, y, self.DASH_METER_W, 1))
         width = round(self.DASH_METER_W * max(0.0, min(1.0, filled)))
@@ -494,6 +536,7 @@ class Game:
 
 
 def main() -> None:
+    sfx.prepare()  # before pygame.init(), or the device is opened twice
     pygame.init()
     sfx.init()
     try:

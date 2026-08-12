@@ -22,6 +22,11 @@ CHANNELS = 1
 # there is no music here that would suffer from underruns.
 BUFFER = 512
 
+# A few milliseconds of ramp at the start of every tone. A square wave otherwise
+# begins at full amplitude -- the first sample of the jump is +9830 out of
+# silence -- and that step is an audible click in front of the note.
+FADE_IN_MS = 4
+
 # The sounds this module knows how to make. Named up front so a call site
 # can be checked against it without an audio device present.
 BUILT = ("jump", "double_jump", "dash", "smash", "die", "blip")
@@ -38,6 +43,7 @@ def _tone(start_hz, end_hz, ms, volume=0.30, duty=0.5) -> pygame.mixer.Sound:
     tear audibly as the frequency slides.
     """
     samples = int(SAMPLE_RATE * ms / 1000)
+    fade = max(1, int(SAMPLE_RATE * FADE_IN_MS / 1000))
     buf = array.array("h")
     phase = 0.0
     for i in range(samples):
@@ -45,22 +51,38 @@ def _tone(start_hz, end_hz, ms, volume=0.30, duty=0.5) -> pygame.mixer.Sound:
         hz = start_hz + (end_hz - start_hz) * progress
         phase = (phase + hz / SAMPLE_RATE) % 1.0
         wave = 1.0 if phase < duty else -1.0
-        envelope = 1.0 - progress
+        envelope = (1.0 - progress) * min(1.0, i / fade)
         buf.append(int(wave * envelope * volume * 32767))
     return pygame.mixer.Sound(buffer=buf.tobytes())
 
 
+WANTED = (SAMPLE_RATE, BITS, CHANNELS)
+
+
+def prepare() -> None:
+    """Choose the mixer format. Must run before `pygame.init()`.
+
+    `pygame.init()` opens the mixer at its own defaults, and `mixer.init` on an
+    already-open mixer is a silent no-op -- which is how the tones below once
+    ended up read back at 44100 stereo, a quarter of their length and an octave
+    and a half sharp. Closing and reopening the device fixed the format but pops:
+    a device transition is audible on most drivers, and that burst at startup was
+    exactly it. Declaring the format up front opens the device once, correctly.
+    """
+    pygame.mixer.pre_init(SAMPLE_RATE, BITS, CHANNELS, BUFFER)
+
+
 def init() -> None:
-    """Open the mixer and build the tones. Silent, not fatal, if that fails."""
+    """Build the tones. Silent, not fatal, if there is no audio device."""
     global _ready
     try:
-        # Close whatever is already open first. `pygame.init()` opens the mixer
-        # at its own defaults, and `mixer.init` on an initialised mixer is a
-        # silent no-op -- the buffers below would then be read back at 44100
-        # stereo instead of 22050 mono, making every sound a quarter as long and
-        # an octave and a half sharp.
-        pygame.mixer.quit()
-        pygame.mixer.init(SAMPLE_RATE, BITS, CHANNELS, BUFFER)
+        if pygame.mixer.get_init() is None:
+            pygame.mixer.init(SAMPLE_RATE, BITS, CHANNELS, BUFFER)
+        elif pygame.mixer.get_init()[:3] != WANTED:
+            # `prepare()` was skipped or overridden. Reopening pops, so this is
+            # the fallback rather than the normal path.
+            pygame.mixer.quit()
+            pygame.mixer.init(SAMPLE_RATE, BITS, CHANNELS, BUFFER)
     except pygame.error:
         _ready = False
         return

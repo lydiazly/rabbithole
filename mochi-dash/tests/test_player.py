@@ -104,7 +104,10 @@ UI_LINES = [
     ("GAME OVER", 2),
     ("SCORE 00000", 1),
     ("ANY KEY TO CONTINUE", 1),
-    ("R RETRY  M MENU", 1),
+    ("P PAUSE  R RETRY  M MENU", 1),
+    ("SMASH THROUGH", 1),
+    ("PAUSED", 2),
+    ("P  RESUME", 1),
     ("W/S  ROW    A/D  CHANGE    SPACE  START", 1),
     ("CHARACTER", 1),
     ("SCENE", 1),
@@ -776,3 +779,43 @@ def test_the_dash_exit_needs_room_to_react():
     assert main.DASH_EXIT_CLEARANCE > 0
     # The clearance has to be long enough to see and answer an obstacle.
     assert main.DASH_EXIT_CLEARANCE * wd.SPEED_MAX > wd.LARGE_BOX[0] * 4
+
+
+def test_pausing_freezes_the_run_and_only_the_run():
+    """A pause has to stop the clock as well as the world.
+
+    The dash timer and the cooldown both run off the same update, so a pause
+    that only skipped the world would quietly burn the dash while nothing moved.
+    """
+    import os
+    os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
+    os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
+    import pygame
+
+    pygame.init()
+    game = main.Game()
+    game.HIGHSCORE_PATH = None
+    game.start_run()
+    game.start_dash()
+    for _ in range(30):
+        game.update(main.DT)
+    frozen = (
+        game.world.distance, game.score, game.dash_left,
+        game.player.y, game.tick,
+    )
+    game.paused = True
+    for _ in range(120):
+        game.update(main.DT)
+    assert (
+        game.world.distance, game.score, game.dash_left,
+        game.player.y, game.tick,
+    ) == frozen
+    game.paused = False
+    game.update(main.DT)
+    assert game.world.distance > frozen[0], "should carry on afterwards"
+
+
+def test_the_dash_prompt_gets_out_of_the_way():
+    """Long enough to read on a first dash, short enough not to live there."""
+    assert 0.0 < main.DASH_PROMPT_SECONDS < main.DASH_SECONDS / 2
+    assert len(main.DASH_PROMPT.split()) == 2, "two words, as asked"
