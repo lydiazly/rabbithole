@@ -8,6 +8,12 @@ dependencies = ["pygame-ce>=2.5"]
 [project.scripts]
 mochi-dash = "mochi_dash.main:main"
 
+# Read by ../play. "windowed" means the game opens its own window, so the
+# launcher can start it and give the terminal straight back; the default,
+# "terminal", means the game needs the terminal and must keep it.
+[tool.rabbithole]
+launch = "windowed"
+
 [dependency-groups]
 dev = ["pytest>=8.0"]
 

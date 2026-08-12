@@ -10,6 +10,18 @@ its own directory.
 
 `R` plays again and `Q` quits, in all of them.
 
+A game that draws in a window says so in its `pyproject.toml`, and `play` starts
+it in the background, hands the terminal straight back, and sends anything it
+prints to `$TMPDIR/rabbithole-<game>.log`:
+
+```toml
+[tool.rabbithole]
+launch = "windowed"
+```
+
+The default is the terminal, which is the screen for the curses games: they hold
+it until they exit, because detaching one from its tty kills it.
+
 ## snake
 
 Terminal. Steer with the arrow keys or `WASD`, eat the food to grow. Hitting a

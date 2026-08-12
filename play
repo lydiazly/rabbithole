@@ -86,15 +86,67 @@ entry_point() {
     ' "$1/pyproject.toml"
 }
 
+# Whether the game draws in a window of its own or in the terminal it was started
+# from. Declared per game rather than guessed from its dependencies, because what
+# a game needs from the terminal is a fact about the game, not about its library
+# list. Anything but "windowed" -- including nothing at all -- means the terminal
+# is the screen: the safe default, since detaching a curses game from its tty
+# kills it outright.
+launch_mode() {
+    awk '
+        /^\[tool\.rabbithole\]/ { in_rh = 1; next }
+        /^\[/                   { in_rh = 0 }
+        in_rh && /^launch[[:space:]]*=/ {
+            sub(/^launch[[:space:]]*=[[:space:]]*/, "")
+            gsub(/^"|"$/, "")
+            print
+            exit
+        }
+    ' "$1/pyproject.toml"
+}
+
 launch() {
-    local dir=$1 entry
+    local dir=$1 entry mode log pid
     entry=$(entry_point "$dir")
     [[ -n $entry ]] || die \
         "Don't know how to start '$dir': its pyproject.toml declares no [project.scripts] entry."
-    printf '\n  starting %s\n\n' "$dir"
-    cd "$dir"
-    # exec so the game owns the terminal, and its exit code becomes ours.
-    exec uv run "$entry"
+    mode=$(launch_mode "$dir")
+    cd "$dir" || die "Cannot enter $root/$dir"
+
+    if [[ $mode != windowed ]]; then
+        printf '\n  starting %s\n\n' "$dir"
+        # exec so the game owns the terminal, and its exit code becomes ours.
+        exec uv run "$entry"
+    fi
+
+    # A windowed game draws somewhere else, so hand it off and give the terminal
+    # straight back rather than holding it for a whole play session. That gives
+    # up the game's exit code -- there is nobody left to report it to.
+    #
+    # Syncing first, in the foreground, keeps the one slow and failure-prone step
+    # where it can still be seen; it costs milliseconds once the venv is warm.
+    uv sync --quiet || die "Cannot install the dependencies of '$dir'."
+
+    # nohup rather than setsid, because it is POSIX and enough here: this script
+    # exits immediately, so the game is reparented away from the shell either
+    # way, and nohup keeps a closing terminal's SIGHUP off it. stdin has to go
+    # somewhere other than the terminal, or reading it would stop the game with
+    # SIGTTIN. Output goes to a log rather than over a live prompt.
+    log=${TMPDIR:-/tmp}/rabbithole-$dir.log
+    nohup uv run --no-sync "$entry" </dev/null >"$log" 2>&1 &
+    pid=$!
+
+    # Long enough to catch a game that cannot start at all -- no display, a bad
+    # import -- which would otherwise look exactly like a successful launch.
+    sleep 1
+    if ! kill -0 "$pid" 2>/dev/null; then
+        printf '\n%s did not start:\n\n' "$dir" >&2
+        tail -n 20 "$log" >&2
+        exit 1
+    fi
+
+    printf '\n  %s is running (pid %s)\n  output: %s\n\n' "$dir" "$pid" "$log"
+    exit 0
 }
 
 usage() {
