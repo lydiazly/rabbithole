@@ -121,7 +121,7 @@ SQUASH3 = (
     "@@@@@@@@@@@@@@@@@@@@",
 )
 
-SLIME_FRAMES = {
+SLIME_POSES = {
     "round": ROUND,
     "round_b": ROUND_B,
     "stretch1": STRETCH1,
@@ -129,6 +129,122 @@ SLIME_FRAMES = {
     "squash1": SQUASH1,
     "squash2": SQUASH2,
     "squash3": SQUASH3,
+}
+
+# -- the cat ---------------------------------------------------------------
+#
+# The same seven silhouettes at exactly the same sizes -- a character may not
+# change a hitbox -- but its own face and chin. Eyes sit lower than the slime's
+# and are two pixels tall rather than one, the mouth is an omega, and the bottom
+# row is inset so the chin reads round where the slime's is flat.
+
+CAT_ROUND = (
+    "....@@@@@@....",
+    "..@@oo####@@..",
+    ".@o**o######@.",
+    ".@ooo#######@.",
+    "@#ooo########@",
+    "@#oo#########@",
+    "@#o#@####@###@",
+    "@###@####@###@",
+    "@############@",
+    "@###@#@@#@###@",
+    "@####@##@####@",
+    ".@@@@@@@@@@@@.",
+)
+
+CAT_ROUND_B = (
+    "....@@@@@@....",
+    "..@@oo####@@..",
+    ".@o**o######@.",
+    "@#ooo########@",
+    "@#oo#########@",
+    "@#o#@####@###@",
+    "@###@####@###@",
+    "@############@",
+    "@###@#@@#@###@",
+    "@####@##@####@",
+    ".@@@@@@@@@@@@.",
+)
+
+CAT_STRETCH1 = (
+    "...@@@@@@...",
+    "..@@oo##@@..",
+    ".@o**o####@.",
+    ".@ooo#####@.",
+    "@#ooo######@",
+    "@#oo#######@",
+    "@#o########@",
+    "@#o@####@##@",
+    "@##@####@##@",
+    "@##########@",
+    "@##@#@@#@##@",
+    "@###@##@###@",
+    "@##########@",
+    ".@@@@@@@@@@.",
+)
+
+CAT_STRETCH2 = (
+    "...@@@@...",
+    "..@oo#@@..",
+    ".@o**o##@.",
+    ".@ooo###@.",
+    "@#ooo####@",
+    "@#oo#####@",
+    "@#o######@",
+    "@#o@##@##@",
+    "@##@##@##@",
+    "@########@",
+    "@#@#@@#@#@",
+    "@##@##@##@",
+    "@########@",
+    "@########@",
+    "@########@",
+    "@########@",
+    ".@@@@@@@@.",
+)
+
+CAT_SQUASH1 = (
+    "....@@@@@@@@....",
+    "..@@oo######@@..",
+    ".@o**o########@.",
+    "@#ooo##########@",
+    "@#oo@######@###@",
+    "@#o#@######@###@",
+    "@##############@",
+    "@####@#@@#@####@",
+    "@#####@##@#####@",
+    ".@@@@@@@@@@@@@@.",
+)
+
+CAT_SQUASH2 = (
+    "....@@@@@@@@@@....",
+    "..@oo##########@..",
+    ".@o**o##########@.",
+    "@#ooo@######@####@",
+    "@#o##@######@####@",
+    "@#####@#@@#@#####@",
+    "@######@##@######@",
+    ".@@@@@@@@@@@@@@@@.",
+)
+
+CAT_SQUASH3 = (
+    ".....@@@@@@@@@@.....",
+    "..@o**o##########@..",
+    "@#ooo#@######@#####@",
+    "@#####@######@#####@",
+    "@######@#@@#@######@",
+    ".@@@@@@@@@@@@@@@@@@.",
+)
+
+CAT_POSES = {
+    "round": CAT_ROUND,
+    "round_b": CAT_ROUND_B,
+    "stretch1": CAT_STRETCH1,
+    "stretch2": CAT_STRETCH2,
+    "squash1": CAT_SQUASH1,
+    "squash2": CAT_SQUASH2,
+    "squash3": CAT_SQUASH3,
 }
 
 # -- obstacles ------------------------------------------------------------
@@ -178,18 +294,18 @@ CACTUS_LARGE = (
 # Snow's ground pair. Same footprints as the cacti (7x11 and 9x16) with the same
 # solid core, so they drop into the same hitboxes and the scene cannot change how
 # hard the game is — the rule that holds for characters holds for scenery too.
-SNOWMAN = (
+PINE_SMALL = (
+    "...o...",
+    "..o#o..",
+    ".o###o.",
+    "..o#o..",
+    ".o###o.",
+    "o#####o",
+    ".o###o.",
+    "o#####o",
     "..ooo..",
-    ".o###o.",
-    ".o###o.",
-    "..###..",
-    ".o###o.",
-    "o#####o",
-    "o#####o",
-    "o#####o",
-    ".o###o.",
-    "..###..",
-    "..###..",
+    "..o#o..",
+    "..ooo..",
 )
 
 PINE = (
@@ -238,22 +354,22 @@ FLYER_DOWN = (
 # one is this mirrored.
 EAR_LEFT = (
     (  # upright
-        "@..",
-        "@@.",
-        "@o@",
-        "@@@",
+        "@...",
+        "@@..",
+        "@o@.",
+        "@@@@",
     ),
     (  # half down
-        "...",
-        "@@.",
-        "@o@",
-        "@@@",
+        "....",
+        "@@..",
+        "@o@.",
+        "@@@@",
     ),
     (  # flicked
-        "...",
-        ".@.",
-        "@o@",
-        "@@@",
+        "....",
+        ".@..",
+        "@o@.",
+        "@@@@",
     ),
 )
 
@@ -262,7 +378,7 @@ EAR_LEFT = (
 # long upright hold would spend all of them holding still.
 EAR_IDLE = ((0, 14), (1, 8), (0, 16), (1, 5), (2, 6), (1, 5))
 
-EAR_W = 3
+EAR_W = 4
 EAR_H = 4
 # Rows of ear tucked behind the head, so it reads as attached rather than as a
 # hat balanced on top.
@@ -387,8 +503,10 @@ class Accessory:
         self.sink = sink
         self.width, self.height = sizes.pop()
         self.cycle = sum(ticks for _, ticks in self.idle)
+        # Anchored on the slime's crowns: every character's poses are the same
+        # size, so one table serves them all.
         self.anchors = {
-            name: self._anchor(rows) for name, rows in SLIME_FRAMES.items()
+            name: self._anchor(rows) for name, rows in SLIME_POSES.items()
         }
 
     def _anchor(self, rows) -> tuple[int, int, int]:
@@ -412,14 +530,14 @@ EARS = Accessory(EAR_LEFT, EAR_IDLE, sink=EAR_SINK)
 class CharacterSheet:
     """One character's poses and accessory, at one day/night step."""
 
-    def __init__(self, look, accessory: Accessory | None):
+    def __init__(self, look, poses, accessory: Accessory | None):
         tones = {
             "@": look.outline,
             "#": look.body,
             "o": look.sheen,
             "*": look.spec,
         }
-        self.poses = {n: build(r, tones) for n, r in SLIME_FRAMES.items()}
+        self.poses = {n: build(r, tones) for n, r in poses.items()}
         # Left and right are built together so a character without an accessory
         # builds neither, rather than paying for ears it never wears.
         self.accessory = tuple(
@@ -462,14 +580,15 @@ class WorldSheet:
 
 # Frame sizes are needed for hitboxes and placement before any sheet is built,
 # so they come from the art itself rather than from a rendered surface.
-SLIME_SIZES = {name: sprite_size(rows) for name, rows in SLIME_FRAMES.items()}
+POSE_SIZES = {name: sprite_size(rows) for name, rows in SLIME_POSES.items()}
 
 # Every piece of art in one place, for the validation test.
 ALL_ART = {
-    **{f"slime.{n}": r for n, r in SLIME_FRAMES.items()},
+    **{f"slime.{n}": r for n, r in SLIME_POSES.items()},
+    **{f"cat.{n}": r for n, r in CAT_POSES.items()},
     "cactus_small": CACTUS_SMALL,
     "cactus_large": CACTUS_LARGE,
-    "snowman": SNOWMAN,
+    "pine_small": PINE_SMALL,
     "pine": PINE,
     "flyer_up": FLYER_UP,
     "flyer_down": FLYER_DOWN,

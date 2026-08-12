@@ -31,10 +31,28 @@ class Character:
     name: str
     day: Look
     night: Look
+    # Its own seven poses. They must match POSE_SIZES frame for frame -- a
+    # character may look different but may never be a different size, because
+    # the hitboxes come from that one table.
+    poses: dict = None
     # None, or art to draw behind the head. A type rather than a per-feature
     # flag, so a character with horns instead of ears is a different value here
     # and no new code anywhere.
     accessory: sprites.Accessory | None = None
+
+    def __post_init__(self):
+        poses = self.poses if self.poses is not None else sprites.SLIME_POSES
+        object.__setattr__(self, "poses", poses)
+        if set(poses) != set(sprites.POSE_SIZES):
+            raise ValueError(f"{self.key}: poses must cover exactly {sorted(sprites.POSE_SIZES)}")
+        for name, rows in poses.items():
+            sprites.validate(rows)
+            if sprites.sprite_size(rows) != sprites.POSE_SIZES[name]:
+                raise ValueError(
+                    f"{self.key}: pose {name} is {sprites.sprite_size(rows)}, "
+                    f"must be {sprites.POSE_SIZES[name]} -- a character cannot "
+                    f"change a hitbox"
+                )
 
 
 SLIME = Character(
@@ -71,6 +89,7 @@ CAT = Character(
         spec=(255, 232, 198),
         outline=(120, 56, 18),
     ),
+    poses=sprites.CAT_POSES,
     accessory=sprites.EARS,
 )
 
@@ -102,6 +121,6 @@ def sheet_for(character: Character, step: int) -> sprites.CharacterSheet:
     key = (character.key, step)
     if key not in _sheets:
         _sheets[key] = sprites.CharacterSheet(
-            look_for_step(character, step), character.accessory
+            look_for_step(character, step), character.poses, character.accessory
         )
     return _sheets[key]

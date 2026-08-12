@@ -11,21 +11,31 @@ All units are low-resolution canvas pixels.
 
 import math
 
-from .sprites import SLIME_SIZES
+from .sprites import POSE_SIZES
 
 # Snap up, drift down. This inverts the usual platformer convention of falling
 # harder than you rise, which reads as weight but, at this jump height, mostly
 # reads as being dragged back down before you have arrived. Getting to the top
 # quickly and hanging on the way down leaves the arc under the player's control
 # for longer, which matters more here because the second jump is spent mid-flight.
+GRAVITY_UP = 2050.0
+GRAVITY_DOWN = 1270.0
+JUMP_SPEED = 420.0
+JUMP_CUT_SPEED = 110.0  # releasing early while rising clamps to this, giving a hop
+
+# Apex hang: gravity is cut while the slime is moving slowly either way, which
+# blunts the top of the arc towards a circle instead of a parabola's point.
 #
-# Rise 0.23 s and fall 0.30 s, still peaking at 40 px and still totalling 0.53 s —
-# airtime is what world.py keys the spawn-gap floor to, so the total is held
-# fixed and only its distribution changes.
-GRAVITY_UP = 1510.0
-GRAVITY_DOWN = 890.0
-JUMP_SPEED = 348.0
-JUMP_CUT_SPEED = 120.0  # releasing early while rising clamps to this, giving a hop
+# A pointed apex is where clipping the top of an obstacle feels unfair -- you
+# are only at full height for an instant. Here the slime stays within about 7 px
+# of its peak for a fifth of a second, so the top of the jump is somewhere you
+# arrive rather than somewhere you pass through.
+#
+# It is paid for rather than added: hanging lengthens the flight, and airtime is
+# what world.py keys the spawn-gap floor to, so the gravity either side of the
+# hang went up to keep the total where it was.
+APEX_HANG_SPEED = 70.0
+APEX_HANG_FACTOR = 0.45
 
 # The mid-air second jump, expressed in height rather than in speed.
 #
@@ -76,6 +86,30 @@ def clamp(v: float, lo: float, hi: float) -> float:
     return lo if v < lo else hi if v > hi else v
 
 
+# Height gained coasting from the top of the hang band to a standstill.
+_HANG_RISE = APEX_HANG_SPEED**2 / (2.0 * GRAVITY_UP * APEX_HANG_FACTOR)
+
+
+def rise_from_speed(speed: float) -> float:
+    """Height still to be gained from an upward speed, allowing for the hang.
+
+    The plain v^2/2g stopped being true once gravity varies with speed, and the
+    second jump clamps its apex using exactly this -- get it wrong and the clamp
+    leaks.
+    """
+    if speed <= APEX_HANG_SPEED:
+        return speed * speed / (2.0 * GRAVITY_UP * APEX_HANG_FACTOR)
+    return _HANG_RISE + (speed**2 - APEX_HANG_SPEED**2) / (2.0 * GRAVITY_UP)
+
+
+def speed_for_rise(height: float) -> float:
+    """The upward speed that gains exactly this height. Inverse of the above."""
+    height = max(0.0, height)
+    if height <= _HANG_RISE:
+        return math.sqrt(2.0 * GRAVITY_UP * APEX_HANG_FACTOR * height)
+    return math.sqrt(APEX_HANG_SPEED**2 + 2.0 * GRAVITY_UP * (height - _HANG_RISE))
+
+
 def idle_body_frame(tick: int) -> str:
     """The resting two-frame breathe, as a function of a tick count."""
     return "round_b" if (tick // IDLE_TICKS) % 2 else "round"
@@ -115,7 +149,7 @@ class Slime:
 
     @property
     def size(self) -> tuple[int, int]:
-        return SLIME_SIZES[self.frame]
+        return POSE_SIZES[self.frame]
 
     def hitbox(self):
         """Return (left, top, width, height), inset so grazes are forgiven."""
@@ -146,10 +180,10 @@ class Slime:
             return None
         self.jumps_used += 1
         height = self.ground_y - self.y
-        rise_left = self.vy**2 / (2.0 * GRAVITY_UP) if self.vy < 0.0 else 0.0
+        rise_left = rise_from_speed(-self.vy) if self.vy < 0.0 else 0.0
         # Never below rise_left: the second jump must not be able to slow you down.
         target = max(rise_left, min(rise_left + DOUBLE_JUMP_RISE, MAX_APEX - height))
-        self.vy = -math.sqrt(2.0 * GRAVITY_UP * target)
+        self.vy = -speed_for_rise(target)
         self._play(TAKEOFF)
         return "air"
 
@@ -172,6 +206,8 @@ class Slime:
             self.ducking = ducking
         else:
             gravity = GRAVITY_UP if (self.vy < 0.0 and holding_jump) else GRAVITY_DOWN
+            if abs(self.vy) < APEX_HANG_SPEED:
+                gravity *= APEX_HANG_FACTOR
             if self.vy < -JUMP_CUT_SPEED and not holding_jump:
                 self.vy = -JUMP_CUT_SPEED
             self.vy += gravity * dt

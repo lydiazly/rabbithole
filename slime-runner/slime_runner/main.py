@@ -35,14 +35,15 @@ LEFT_KEYS = (pygame.K_LEFT, pygame.K_a)
 RIGHT_KEYS = (pygame.K_RIGHT, pygame.K_d)
 QUIT_KEYS = (pygame.K_ESCAPE, pygame.K_q)
 RESTART_KEYS = (pygame.K_r,)
-SELECT_KEYS = (pygame.K_c,)
+MENU_KEYS = (pygame.K_m,)
 PICK_KEYS = (pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4)
 ROW_UP_KEYS = (pygame.K_UP, pygame.K_w)
 ROW_DOWN_KEYS = (pygame.K_DOWN, pygame.K_s)
 
-# The select screen's two rows, top to bottom.
-SCENE_ROW = 0
-CHARACTER_ROW = 1
+# The menu's rows, top to bottom.
+CHARACTER_ROW = 0
+SCENE_ROW = 1
+MENU_ROWS = (CHARACTER_ROW, SCENE_ROW)
 
 JUMP_BUFFER = 0.12  # a press just before landing still counts
 
@@ -54,7 +55,7 @@ GAME_OVER_HOLD = 3.5
 
 HIGHSCORE_PATH = Path(__file__).resolve().parent.parent / ".highscore"
 
-SELECT = "select"
+MENU = "menu"
 TITLE = "title"
 PLAYING = "playing"
 GAME_OVER = "over"
@@ -103,7 +104,7 @@ class Game:
         self.highscore = load_highscore()
         self.over_timer = 0.0
         self.jump_buffer = 0.0
-        self.state = SELECT
+        self.state = MENU
 
     # -- state transitions ------------------------------------------------
 
@@ -116,8 +117,8 @@ class Game:
     def previewed_character(self):
         return characters.CHARACTERS[self.picks[CHARACTER_ROW]]
 
-    def go_to_select(self) -> None:
-        self.state = SELECT
+    def go_to_menu(self) -> None:
+        self.state = MENU
         self.preview_tick = 0
         self.world.use_scene(self.previewed_scene)
         self.slime.reset()
@@ -167,10 +168,10 @@ class Game:
             # including the game-over banner, where any other key means "carry on".
             if event.key in QUIT_KEYS:
                 return False
-            if event.key in SELECT_KEYS and self.state != SELECT:
-                self.go_to_select()
-            elif self.state == SELECT:
-                self.select_key(event.key)
+            if event.key in MENU_KEYS and self.state != MENU:
+                self.go_to_menu()
+            elif self.state == MENU:
+                self.menu_key(event.key)
             elif self.state == TITLE:
                 if event.key in JUMP_KEYS:
                     self.start_run()
@@ -186,7 +187,7 @@ class Game:
     def row_options(self, row: int):
         return scenes.SCENES if row == SCENE_ROW else characters.CHARACTERS
 
-    def select_key(self, key: int) -> None:
+    def menu_key(self, key: int) -> None:
         count = len(self.row_options(self.row))
         moved = True
         if key in LEFT_KEYS:
@@ -196,9 +197,9 @@ class Game:
         elif key in PICK_KEYS[:count]:
             self.picks[self.row] = PICK_KEYS.index(key)
         elif key in ROW_UP_KEYS:
-            self.row = SCENE_ROW
+            self.row = (self.row - 1) % len(MENU_ROWS)
         elif key in ROW_DOWN_KEYS:
-            self.row = CHARACTER_ROW
+            self.row = (self.row + 1) % len(MENU_ROWS)
         elif key in CONFIRM_KEYS:
             self.scene = self.previewed_scene
             self.character = self.previewed_character
@@ -212,7 +213,7 @@ class Game:
             self.world.use_scene(self.previewed_scene)
 
     def update(self, dt: float) -> None:
-        if self.state == SELECT:
+        if self.state == MENU:
             self.preview_tick += 1
             return
 
@@ -254,7 +255,7 @@ class Game:
     # -- drawing ----------------------------------------------------------
 
     def draw(self) -> None:
-        scene = self.previewed_scene if self.state == SELECT else self.scene
+        scene = self.previewed_scene if self.state == MENU else self.scene
         step = step_at(self.world.phase)
         palette = scenes.palette_for_step(scene, step)
         ink, halo = scenes.text_tones(scene, step)
@@ -262,8 +263,8 @@ class Game:
         scenery = scenes.sheet_for(scene, step)
         self.world.draw(self.canvas, palette, step, scenery)
 
-        if self.state == SELECT:
-            self.draw_select(step, ink, halo)
+        if self.state == MENU:
+            self.draw_menu(step, ink, halo)
         else:
             self.puffs.draw(self.canvas, scenery)
             self.blit_character(
@@ -309,59 +310,60 @@ class Game:
         self.text(score, 6, ink, halo, x=world.WIDTH - pixelfont.text_width(score) - 6)
 
         if self.state == PLAYING:
-            self.text("R RETRY  C SELECT", 6, ink, halo, x=6)
+            self.text("R RETRY  M MENU", 6, ink, halo, x=6)
         elif self.state == TITLE:
             self.text(self.character.name, 20, ink, halo, 2)
             self.text("SPACE OR W - JUMP", 38, ink, halo)
             self.text("JUMP AGAIN IN AIR TO DOUBLE", 47, ink, halo)
             self.text("S - DUCK   A/D - SHIFT", 56, ink, halo)
-            self.text("C - CHARACTER   Q - QUIT", 65, ink, halo)
+            self.text("M - MENU   Q - QUIT", 65, ink, halo)
         elif self.state == GAME_OVER:
             self.text("GAME OVER", 30, ink, halo, 2)
             self.text(f"SCORE {int(self.world.score):05d}", 50, ink, halo)
             if self.over_timer >= GAME_OVER_LOCKOUT:
                 self.text("ANY KEY TO CONTINUE", 62, ink, halo)
 
-    def draw_select(self, step, ink, halo) -> None:
-        # The backdrop already *is* the previewed scene, so the scene row needs
-        # only names -- the preview is the whole screen behind them.
-        self.text("SCENE", 8, ink, halo)
-        scene_xs = preview_positions(len(scenes.SCENES))
-        for i, (scene, x) in enumerate(zip(scenes.SCENES, scene_xs)):
-            self.text(scene.name, 24, ink, halo,
-                      x=x - pixelfont.text_width(scene.name) // 2)
-            if i == self.picks[SCENE_ROW]:
-                self.draw_marker(x, 17, ink, active=self.row == SCENE_ROW)
+    # A plain list with a cursor, in the shape every pixel-era option screen
+    # used. The chosen character stands below it in the chosen scene, so the
+    # menu previews both without needing a swatch for either.
+    MENU_LABEL_X = 76
+    MENU_VALUE_X = 158
+    MENU_TOP = 40
+    MENU_PITCH = 11
 
-        self.text("CHARACTER", 50, ink, halo)
+    def draw_menu(self, step, ink, halo) -> None:
+        self.text("SLIME RUNNER", 16, ink, halo, 2)
+
+        rows = (
+            ("CHARACTER", self.previewed_character.name),
+            ("SCENE", self.previewed_scene.name),
+        )
+        for i, (label, value) in enumerate(rows):
+            y = self.MENU_TOP + i * self.MENU_PITCH
+            if i == self.row:
+                self.draw_cursor(self.MENU_LABEL_X - 10, y, ink)
+            self.text(label, y, ink, halo, x=self.MENU_LABEL_X)
+            self.text(f"< {value} >", y, ink, halo, x=self.MENU_VALUE_X)
+
+        self.text("W/S  ROW    A/D  CHANGE    SPACE  START", 98, ink, halo)
+
+        # The character stands on the ground below the list, in the scene the
+        # menu is currently showing.
         frame = idle_body_frame(self.preview_tick)
-        for i, (character, x) in enumerate(
-            zip(characters.CHARACTERS, preview_positions(len(characters.CHARACTERS)))
-        ):
-            surf = characters.sheet_for(character, step).poses[frame]
-            pos = (x - surf.get_width() // 2, world.GROUND_Y - surf.get_height())
-            self.blit_character(
-                character, step, frame,
-                self.accessory_frame(character, self.preview_tick, True), pos,
-            )
-            self.text(character.name, 88, ink, halo,
-                      x=x - pixelfont.text_width(character.name) // 2)
-            if i == self.picks[CHARACTER_ROW]:
-                self.draw_marker(x, 62, ink, active=self.row == CHARACTER_ROW)
+        character = self.previewed_character
+        surf = characters.sheet_for(character, step).poses[frame]
+        self.blit_character(
+            character, step, frame,
+            self.accessory_frame(character, self.preview_tick, True),
+            (world.WIDTH // 2 - surf.get_width() // 2,
+             world.GROUND_Y - surf.get_height()),
+        )
 
-        self.text("A/D PICK  W/S ROW  SPACE GO", 98, ink, halo)
-
-    def draw_marker(self, x: int, y: int, ink, active: bool = True) -> None:
-        """A downward wedge over the current pick.
-
-        Both rows keep their marker so the chosen pair is always readable; the
-        row the keys are driving gets the full wedge, the other a flat bar.
-        """
-        rows = 3 if active else 1
-        for row in range(rows):
-            width = 5 - row * 2
-            self.canvas.fill(ink, (x - width // 2, y + row + (0 if active else 2),
-                                   width, 1))
+    def draw_cursor(self, x: int, y: int, ink) -> None:
+        """A right-pointing wedge beside the active row."""
+        for row in range(5):
+            width = 3 - abs(row - 2)
+            self.canvas.fill(ink, (x, y + row, width, 1))
 
 
 def main() -> None:

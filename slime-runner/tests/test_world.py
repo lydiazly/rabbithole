@@ -208,6 +208,12 @@ def test_speed_and_day_phase_stay_in_range():
 # -- scenes -----------------------------------------------------------------
 
 
+def test_snow_no_longer_uses_the_snowman():
+    """It was replaced by a smaller pine; the element is gone, not just unused."""
+    assert not hasattr(sprites, "SNOWMAN")
+    assert scenes.SNOW.ground["small"] is sprites.PINE_SMALL
+
+
 def test_every_scene_supplies_art_for_every_role_the_spawner_uses():
     """A scene missing a role would crash on its first spawn of that kind."""
     for scene in scenes.SCENES:

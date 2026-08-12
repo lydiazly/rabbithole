@@ -143,7 +143,7 @@ SNOW = Scene(
         moon=(232, 240, 255),
         text=(226, 234, 250),
     ),
-    ground={"small": sprites.SNOWMAN, "large": sprites.PINE},
+    ground={"small": sprites.PINE_SMALL, "large": sprites.PINE},
     # The same bird as the desert's, painted in this scene's obstacle colours.
     flyer=(sprites.FLYER_UP, sprites.FLYER_DOWN),
     layers=frozenset(LAYERS) - {"clouds"},

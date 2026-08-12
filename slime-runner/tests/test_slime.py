@@ -40,9 +40,9 @@ def test_art_is_rectangular_and_uses_known_characters(name):
 def test_every_sheet_builds_for_every_character_and_step(character, step):
     """A sprite using a character its colour map lacks KeyErrors on build."""
     sheet = characters.sheet_for(character, step)
-    assert set(sheet.poses) == set(sprites.SLIME_FRAMES)
+    assert set(sheet.poses) == set(sprites.SLIME_POSES)
     for name, surf in sheet.poses.items():
-        assert surf.get_size() == sprites.SLIME_SIZES[name]
+        assert surf.get_size() == sprites.POSE_SIZES[name]
     expected = len(character.accessory.frames) if character.accessory else 0
     assert len(sheet.accessory) == expected
 
@@ -55,24 +55,24 @@ def test_the_world_sheet_builds_for_every_scene_and_step(scene, step):
 
 
 def test_squash_frames_are_wider_and_shorter_than_the_round_one():
-    rw, rh = sprites.SLIME_SIZES["round"]
+    rw, rh = sprites.POSE_SIZES["round"]
     for name in ("squash1", "squash2", "squash3"):
-        w, h = sprites.SLIME_SIZES[name]
+        w, h = sprites.POSE_SIZES[name]
         assert w > rw and h < rh, name
 
 
 def test_stretch_frames_are_taller_and_narrower_than_the_round_one():
-    rw, rh = sprites.SLIME_SIZES["round"]
+    rw, rh = sprites.POSE_SIZES["round"]
     for name in ("stretch1", "stretch2"):
-        w, h = sprites.SLIME_SIZES[name]
+        w, h = sprites.POSE_SIZES[name]
         assert w < rw and h > rh, name
 
 
 def test_deformation_frames_form_a_monotonic_ladder():
     """The frames only read as one blob deforming if they order consistently."""
     order = ["stretch2", "stretch1", "round", "squash1", "squash2", "squash3"]
-    widths = [sprites.SLIME_SIZES[n][0] for n in order]
-    heights = [sprites.SLIME_SIZES[n][1] for n in order]
+    widths = [sprites.POSE_SIZES[n][0] for n in order]
+    heights = [sprites.POSE_SIZES[n][1] for n in order]
     assert widths == sorted(widths)
     assert heights == sorted(heights, reverse=True)
 
@@ -94,19 +94,39 @@ def test_no_two_glyphs_are_identical():
         seen[glyph] = char
 
 
-def test_hud_and_title_strings_fit_the_canvas():
+UI_LINES = [
+    ("HI 00000  00000", 1),
+    ("SLIME RUNNER", 2),
+    ("SPACE OR W - JUMP", 1),
+    ("JUMP AGAIN IN AIR TO DOUBLE", 1),
+    ("S - DUCK   A/D - SHIFT", 1),
+    ("M - MENU   Q - QUIT", 1),
+    ("GAME OVER", 2),
+    ("SCORE 00000", 1),
+    ("ANY KEY TO CONTINUE", 1),
+    ("R RETRY  M MENU", 1),
+    ("W/S  ROW    A/D  CHANGE    SPACE  START", 1),
+    ("CHARACTER", 1),
+    ("SCENE", 1),
+] + [(f"< {c.name} >", 1) for c in characters.CHARACTERS] \
+  + [(f"< {s.name} >", 1) for s in scenes.SCENES]
+
+
+def test_hud_and_menu_strings_fit_the_canvas():
     """A long line would silently run off the edge, or set_at out of bounds."""
-    lines = [
-        ("HI 00000  00000", 1),
-        ("SLIME RUNNER", 2),
-        ("SPACE OR W - JUMP", 1),
-        ("JUMP AGAIN IN AIR TO DOUBLE", 1),
-        ("S - DUCK   A/D - SHIFT", 1),
-        ("GAME OVER", 2),
-        ("R - RUN AGAIN   Q - QUIT", 1),
-    ]
-    for text, scale in lines:
+    for text, scale in UI_LINES:
         assert pixelfont.text_width(text, scale) <= wd.WIDTH - 12, text
+
+
+def test_every_character_the_ui_prints_has_a_glyph():
+    """Missing glyphs fall back to a solid block and print as garbage.
+
+    "< CAT >" came out as a block, the name, and another block, because the
+    angle brackets had never been drawn.
+    """
+    for text, _ in UI_LINES:
+        for char in text.upper():
+            assert char in pixelfont._GLYPHS, f"{char!r} in {text!r}"
 
 
 # -- characters -------------------------------------------------------------
@@ -119,18 +139,20 @@ def test_character_keys_and_names_are_unique():
     assert len(set(names)) == len(names)
 
 
-def test_characters_are_a_recolour_and_nothing_more():
+def test_characters_may_differ_in_art_but_never_in_size():
     """Picking a character must never pick a difficulty.
 
-    Everything that decides how the game plays -- pose sizes, hitboxes, motion --
-    lives outside the character, so this holds by construction; the test is here
-    so it keeps holding when a third character is added.
+    Characters own their poses now -- the cat has its own face and a rounder
+    chin -- so this is no longer true by construction. Every pose of every
+    character has to match the one size table the hitboxes come from.
     """
     for character in characters.CHARACTERS:
         for step in range(STEPS):
             sheet = characters.sheet_for(character, step)
+            assert set(sheet.poses) == set(sprites.POSE_SIZES), character.key
             for name, surf in sheet.poses.items():
-                assert surf.get_size() == sprites.SLIME_SIZES[name]
+                assert surf.get_size() == sprites.POSE_SIZES[name], (
+                    character.key, name)
 
 
 ACCESSORIES = [c.accessory for c in characters.CHARACTERS if c.accessory]
@@ -143,8 +165,8 @@ def test_every_pose_wears_its_accessory_on_the_crown(accessory):
     Ears floating off the side of a pancake, or buried inside a stretched one,
     would be the obvious failure of computing them rather than authoring them.
     """
-    for name in sprites.SLIME_FRAMES:
-        w, h = sprites.SLIME_SIZES[name]
+    for name in sprites.SLIME_POSES:
+        w, h = sprites.POSE_SIZES[name]
         left, right, dy = accessory.anchors[name]
         # Horizontally: sitting on the crown, not out past the widest point.
         assert -1 <= left, name
@@ -158,8 +180,8 @@ def test_every_pose_wears_its_accessory_on_the_crown(accessory):
 
 @pytest.mark.parametrize("accessory", ACCESSORIES, ids=lambda a: f"{a.width}x{a.height}")
 def test_accessories_sit_symmetrically(accessory):
-    for name in sprites.SLIME_FRAMES:
-        w, _ = sprites.SLIME_SIZES[name]
+    for name in sprites.SLIME_POSES:
+        w, _ = sprites.POSE_SIZES[name]
         left, right, _ = accessory.anchors[name]
         assert left == w - (right + accessory.width), name
 
@@ -214,23 +236,24 @@ def test_a_new_character_needs_nothing_but_its_own_definition():
                             (90, 20, 20)),
         night=characters.Look((160, 50, 50), (210, 100, 100), (255, 210, 210),
                               (70, 16, 16)),
+        poses=sprites.CAT_POSES,
         accessory=sprites.EARS,
     )
     for step in range(STEPS):
         sheet = characters.sheet_for(probe, step)
-        assert set(sheet.poses) == set(sprites.SLIME_FRAMES)
+        assert set(sheet.poses) == set(sprites.SLIME_POSES)
         assert len(sheet.accessory) == len(sprites.EARS.frames)
         for name, surf in sheet.poses.items():
-            assert surf.get_size() == sprites.SLIME_SIZES[name]
+            assert surf.get_size() == sprites.POSE_SIZES[name]
 
 
 @pytest.mark.parametrize("count", range(2, 6))
-def test_the_select_screen_lays_out_any_number_of_characters(count):
+def test_the_menu_lays_out_any_number_of_options(count):
     """A hardcoded pair of x positions was an IndexError at three characters."""
     xs = main.preview_positions(count)
     assert len(xs) == count and xs == sorted(xs)
     assert all(0 < x < wd.WIDTH for x in xs)
-    widest = max(w for w, _ in sprites.SLIME_SIZES.values())
+    widest = max(w for w, _ in sprites.POSE_SIZES.values())
     gaps = [b - a for a, b in zip(xs, xs[1:])]
     assert min(gaps) > widest, f"previews would overlap at {count}"
 
@@ -323,7 +346,39 @@ APEX_TICK = round(sl.JUMP_SPEED / sl.GRAVITY_UP / DT)
 
 def test_a_single_jump_clears_the_tallest_obstacle_with_room_to_spare():
     peak, _, _ = jump_flight()
-    assert peak > wd.LARGE_BOX[1] + sprites.SLIME_SIZES["round"][1]
+    assert peak > wd.LARGE_BOX[1] + sprites.POSE_SIZES["round"][1]
+
+
+def test_the_apex_is_a_plateau_not_a_point():
+    """Blunting the top of the arc is what stops it feeling like a clip.
+
+    With one gravity the slime is at full height for a single tick, and grazing
+    the top of an obstacle reads as unfair. Gravity is cut in a band around zero
+    vertical speed so the peak is somewhere it arrives rather than passes
+    through.
+    """
+    s = make_slime()
+    s.jump()
+    heights = []
+    while not s.on_ground:
+        s.update(DT, True, False, 0, -1e6, 1e6)
+        heights.append(GROUND - s.y)
+    peak = max(heights)
+    near = sum(1 for h in heights if h > peak - 5.0)
+    assert near >= 10, f"only {near} ticks within 5px of the peak"
+
+
+def test_the_hang_is_paid_for_out_of_the_airtime_budget():
+    """Hanging lengthens the flight, and the spawn-gap floor is keyed to it."""
+    _, airtime, _ = jump_flight()
+    assert airtime <= wd.JUMP_AIRTIME
+
+
+def test_rise_and_speed_are_inverses_across_the_hang_band():
+    """The second jump clamps its apex with these; a mismatch leaks the clamp."""
+    for height in (0.0, 1.0, sl._HANG_RISE, sl._HANG_RISE + 0.5, 20.0, 60.0):
+        assert sl.rise_from_speed(sl.speed_for_rise(height)) == pytest.approx(
+            height, abs=1e-6), height
 
 
 def test_a_second_jump_goes_meaningfully_higher():
