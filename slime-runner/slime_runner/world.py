@@ -237,7 +237,7 @@ class World:
 
     # -- drawing ----------------------------------------------------------
 
-    def draw(self, canvas, palette, step: int, sheet: sprites.SpriteSheet) -> None:
+    def draw(self, canvas, palette, step: int, sheet: sprites.WorldSheet) -> None:
         canvas.fill(palette.sky)
         pygame.draw.rect(
             canvas, palette.horizon, (0, GROUND_Y - HORIZON_BAND, WIDTH, HORIZON_BAND)
@@ -276,7 +276,7 @@ class World:
             )
             return
 
-        surf = sheet.cactus_small if ob.kind == "small" else sheet.cactus_large
+        surf = sheet.ground[ob.kind]
         canvas.blit(
             surf,
             (round(ob.x + ob.w / 2 - surf.get_width() / 2), GROUND_Y - surf.get_height()),

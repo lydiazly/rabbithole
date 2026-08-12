@@ -2,7 +2,7 @@
 
 import pytest
 
-from slime_runner import characters, pixelfont, sprites
+from slime_runner import characters, main, pixelfont, sprites
 from slime_runner import slime as sl
 from slime_runner import world as wd
 from slime_runner.palette import (
@@ -38,13 +38,19 @@ def test_art_is_rectangular_and_uses_known_characters(name):
 @pytest.mark.parametrize("character", characters.CHARACTERS, ids=lambda c: c.key)
 def test_every_sheet_builds_for_every_character_and_step(character, step):
     """A sprite using a character its colour map lacks KeyErrors on build."""
-    sheet = sprites.SpriteSheet(
-        palette_for_step(step), characters.look_for_step(character, step)
-    )
-    assert set(sheet.slime) == set(sprites.SLIME_FRAMES)
-    for name, surf in sheet.slime.items():
+    sheet = characters.sheet_for(character, step)
+    assert set(sheet.poses) == set(sprites.SLIME_FRAMES)
+    for name, surf in sheet.poses.items():
         assert surf.get_size() == sprites.SLIME_SIZES[name]
-    assert len(sheet.ears) == len(sprites.EAR_LEFT)
+    expected = len(character.accessory.frames) if character.accessory else 0
+    assert len(sheet.accessory) == expected
+
+
+@pytest.mark.parametrize("step", range(STEPS))
+def test_the_world_sheet_builds_for_every_step(step):
+    sheet = sprites.world_sheet(step, palette_for_step(step))
+    assert set(sheet.ground) == {"small", "large"}
+    assert len(sheet.flyer) == 2
 
 
 def test_squash_frames_are_wider_and_shorter_than_the_round_one():
@@ -121,58 +127,127 @@ def test_characters_are_a_recolour_and_nothing_more():
     """
     for character in characters.CHARACTERS:
         for step in range(STEPS):
-            sheet = sprites.SpriteSheet(
-                palette_for_step(step), characters.look_for_step(character, step)
-            )
-            for name, surf in sheet.slime.items():
+            sheet = characters.sheet_for(character, step)
+            for name, surf in sheet.poses.items():
                 assert surf.get_size() == sprites.SLIME_SIZES[name]
 
 
-def test_every_pose_puts_its_ears_on_the_head():
+ACCESSORIES = [c.accessory for c in characters.CHARACTERS if c.accessory]
+
+
+@pytest.mark.parametrize("accessory", ACCESSORIES, ids=lambda a: f"{a.width}x{a.height}")
+def test_every_pose_wears_its_accessory_on_the_crown(accessory):
     """Anchors are derived from each pose's crown, which moves across all seven.
 
     Ears floating off the side of a pancake, or buried inside a stretched one,
     would be the obvious failure of computing them rather than authoring them.
     """
-    for name, rows in sprites.SLIME_FRAMES.items():
+    for name in sprites.SLIME_FRAMES:
         w, h = sprites.SLIME_SIZES[name]
-        left, right, dy = sprites.EAR_ANCHORS[name]
+        left, right, dy = accessory.anchors[name]
         # Horizontally: sitting on the crown, not out past the widest point.
         assert -1 <= left, name
-        assert right + sprites.EAR_W <= w + 1, name
-        assert left + sprites.EAR_W <= right, f"{name}: ears overlap each other"
+        assert right + accessory.width <= w + 1, name
+        assert left + accessory.width <= right, f"{name}: the two sides overlap"
         # Vertically: mostly above the head, but tucked in enough to touch it.
         assert dy < 0, name
-        assert dy + sprites.EAR_H <= h, name
-        assert dy + sprites.EAR_H > 0, f"{name}: ears float off the top"
+        assert dy + accessory.height <= h, name
+        assert dy + accessory.height > 0, f"{name}: floats off the top"
 
 
-def test_ears_are_symmetric_about_the_body():
-    for name, rows in sprites.SLIME_FRAMES.items():
+@pytest.mark.parametrize("accessory", ACCESSORIES, ids=lambda a: f"{a.width}x{a.height}")
+def test_accessories_sit_symmetrically(accessory):
+    for name in sprites.SLIME_FRAMES:
         w, _ = sprites.SLIME_SIZES[name]
-        left, right, _ = sprites.EAR_ANCHORS[name]
-        left_gap = left
-        right_gap = w - (right + sprites.EAR_W)
-        assert left_gap == right_gap, name
+        left, right, _ = accessory.anchors[name]
+        assert left == w - (right + accessory.width), name
 
 
-def test_the_ear_twitch_visits_every_ear_frame_and_loops():
-    cycle = sum(ticks for _, ticks in sprites.EAR_IDLE)
-    seen = {sl.idle_ear_frame(t) for t in range(cycle)}
-    assert seen == set(range(len(sprites.EAR_LEFT)))
-    assert sl.idle_ear_frame(cycle) == sl.idle_ear_frame(0)
+@pytest.mark.parametrize("accessory", ACCESSORIES, ids=lambda a: f"{a.width}x{a.height}")
+def test_the_idle_cycle_visits_every_frame_and_loops(accessory):
+    seen = {accessory.frame_at(t) for t in range(accessory.cycle)}
+    assert seen == set(range(len(accessory.frames)))
+    assert accessory.frame_at(accessory.cycle) == accessory.frame_at(0)
 
 
-def test_ears_are_still_while_the_body_is_doing_something():
+def test_an_accessory_must_use_every_frame_it_declares():
+    """A frame authored but left out of the cycle would never appear on screen."""
+    with pytest.raises(ValueError):
+        sprites.Accessory(sprites.EAR_LEFT, ((0, 5), (1, 5)))
+    with pytest.raises(ValueError):
+        sprites.Accessory((sprites.EAR_LEFT[0], ("##", "##", "##", "##")), ((0, 5), (1, 5)))
+
+
+def test_the_body_never_counts_as_idle_mid_action():
+    """What suppresses the twitch is `idle`; the clock underneath keeps running."""
     s = make_slime()
-    run(s, 40)  # settle, ears twitching
+    run(s, 40)
+    assert s.idle
     s.jump()
     while not s.on_ground:
         s.update(DT, True, False, 0, -1e6, 1e6)
-        assert s.ear_frame == 0
+        assert not s.idle
     ducked = make_slime()
     run(ducked, 30, ducking=True)
-    assert ducked.ear_frame == 0
+    assert not ducked.idle
+    # The clock advances every tick regardless, or a player who jumps at a normal
+    # rate never reaches the first twitch.
+    before = ducked.accessory_ticks
+    run(ducked, 10, ducking=True)
+    assert ducked.accessory_ticks == before + 10
+
+
+# -- extensibility ----------------------------------------------------------
+
+
+def test_a_new_character_needs_nothing_but_its_own_definition():
+    """Stand a third character up and check every consumer copes.
+
+    This is what the character/world split is for: a new face should be a value
+    in CHARACTERS and no code anywhere else.
+    """
+    probe = characters.Character(
+        key="probe",
+        name="PROBE",
+        day=characters.Look((200, 60, 60), (240, 120, 120), (255, 220, 220),
+                            (90, 20, 20)),
+        night=characters.Look((160, 50, 50), (210, 100, 100), (255, 210, 210),
+                              (70, 16, 16)),
+        accessory=sprites.EARS,
+    )
+    for step in range(STEPS):
+        sheet = characters.sheet_for(probe, step)
+        assert set(sheet.poses) == set(sprites.SLIME_FRAMES)
+        assert len(sheet.accessory) == len(sprites.EARS.frames)
+        for name, surf in sheet.poses.items():
+            assert surf.get_size() == sprites.SLIME_SIZES[name]
+
+
+@pytest.mark.parametrize("count", range(2, 6))
+def test_the_select_screen_lays_out_any_number_of_characters(count):
+    """A hardcoded pair of x positions was an IndexError at three characters."""
+    xs = main.preview_positions(count)
+    assert len(xs) == count and xs == sorted(xs)
+    assert all(0 < x < wd.WIDTH for x in xs)
+    widest = max(w for w, _ in sprites.SLIME_SIZES.values())
+    gaps = [b - a for a, b in zip(xs, xs[1:])]
+    assert min(gaps) > widest, f"previews would overlap at {count}"
+
+
+def test_world_art_is_shared_between_characters_not_copied_per_character():
+    """The world sheet is keyed on the day/night step alone.
+
+    While it was bundled into the character's sheet, every cactus, cloud, moon
+    and puff was rebuilt and held once per character.
+    """
+    palette = palette_for_step(0)
+    assert sprites.world_sheet(0, palette) is sprites.world_sheet(0, palette)
+    slime_sheet = characters.sheet_for(characters.SLIME, 0)
+    assert characters.sheet_for(characters.SLIME, 0) is slime_sheet
+    assert characters.sheet_for(characters.CAT, 0) is not slime_sheet
+    # A character sheet holds no world art at all any more.
+    assert not hasattr(slime_sheet, "ground")
+    assert not hasattr(slime_sheet, "flyer")
 
 
 # -- the animator -----------------------------------------------------------

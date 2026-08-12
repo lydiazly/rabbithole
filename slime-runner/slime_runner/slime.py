@@ -11,7 +11,7 @@ All units are low-resolution canvas pixels.
 
 import math
 
-from .sprites import EAR_IDLE, SLIME_SIZES
+from .sprites import SLIME_SIZES
 
 # Snap up, drift down. This inverts the usual platformer convention of falling
 # harder than you rise, which reads as weight but, at this jump height, mostly
@@ -76,26 +76,9 @@ def clamp(v: float, lo: float, hi: float) -> float:
     return lo if v < lo else hi if v > hi else v
 
 
-_EAR_CYCLE = sum(ticks for _, ticks in EAR_IDLE)
-
-
 def idle_body_frame(tick: int) -> str:
     """The resting two-frame breathe, as a function of a tick count."""
     return "round_b" if (tick // IDLE_TICKS) % 2 else "round"
-
-
-def idle_ear_frame(tick: int) -> int:
-    """Where the ear twitch has got to, as a function of a tick count.
-
-    A plain function so the character-select previews animate off the same clock
-    as the real thing, instead of a second copy of the timing drifting from it.
-    """
-    tick %= _EAR_CYCLE
-    for frame, ticks in EAR_IDLE:
-        if tick < ticks:
-            return frame
-        tick -= ticks
-    return 0
 
 
 def rects_overlap(a, b) -> bool:
@@ -126,8 +109,7 @@ class Slime:
         self._clip_ticks = 0
         self._idle_ticks = 0
         self._idle_b = False
-        self._ear_ticks = 0
-        self.ear_frame = 0
+        self.accessory_ticks = 0
 
     # -- shape ------------------------------------------------------------
 
@@ -204,7 +186,7 @@ class Slime:
                 self._play(LAND_HARD if impact >= HARD_LANDING else LAND_SOFT)
 
         self._advance_frame()
-        self._advance_ears()
+        self.accessory_ticks += 1
         return impact
 
     # -- animation --------------------------------------------------------
@@ -217,20 +199,16 @@ class Slime:
 
     @property
     def idle(self) -> bool:
-        """Standing on the ground with no clip playing and not ducking."""
-        return self._clip is None and self.on_ground and not self.ducking
+        """Standing on the ground with no clip playing and not ducking.
 
-    def _advance_ears(self) -> None:
-        # Ears twitch only at rest: during a jump, a landing or a duck the body is
-        # already carrying the motion and a second thing moving on top of it only
-        # muddies the pose.
-        #
-        # The clock keeps running through those actions even though the ear is
-        # pinned upright. Restarting it instead meant a player who jumps at a
-        # normal rate never accumulated the idle ticks the first twitch needs, and
-        # the ears sat dead for a whole run.
-        self._ear_ticks += 1
-        self.ear_frame = idle_ear_frame(self._ear_ticks) if self.idle else 0
+        An accessory twitches only while this holds: during a jump, a landing or
+        a duck the body already carries the motion, and a second thing moving on
+        top of it only muddies the pose. `accessory_ticks` keeps running through
+        those actions regardless -- restarting it meant a player jumping at any
+        normal rate never reached the first twitch, and the ears sat dead for a
+        whole run.
+        """
+        return self._clip is None and self.on_ground and not self.ducking
 
     def _advance_frame(self) -> None:
         if self._clip is not None:

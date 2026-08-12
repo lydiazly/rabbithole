@@ -315,29 +315,86 @@ def _cap_span(rows) -> tuple[int, int]:
     return filled[0], filled[-1]
 
 
-def _ear_anchor(rows) -> tuple[int, int, int]:
-    """(left x, right x, y) for a pose's ears, relative to its top-left corner.
+class Accessory:
+    """Art drawn behind the head on both sides, with its own idle cycle.
 
-    Derived from the art rather than hand-authored per pose: the ears have to sit
-    on the head's crown, and the crown moves and widens across all seven frames.
+    Ears are the only one so far. It is a type rather than a flag on the
+    character so that the next one — horns, a cap, whatever — is art plus a
+    timing table, with no branch to add in the drawing code.
+
+    Anchors are derived from each pose's crown rather than authored per pose:
+    the crown moves and widens across all seven frames, and an accessory has to
+    follow it.
     """
-    first, last = _cap_span(rows)
-    return first - EAR_W + 1, last, EAR_SINK - EAR_H
+
+    def __init__(self, frames, idle, sink: int = 1):
+        if not frames:
+            raise ValueError("an accessory needs at least one frame")
+        sizes = set()
+        for rows in frames:
+            validate(rows)
+            sizes.add(sprite_size(rows))
+        if len(sizes) != 1:
+            raise ValueError(f"accessory frames differ in size: {sorted(sizes)}")
+        if {i for i, _ in idle} != set(range(len(frames))):
+            raise ValueError("the idle cycle must use every frame, and only those")
+
+        self.frames = tuple(frames)
+        self.idle = tuple(idle)
+        self.sink = sink
+        self.width, self.height = sizes.pop()
+        self.cycle = sum(ticks for _, ticks in self.idle)
+        self.anchors = {
+            name: self._anchor(rows) for name, rows in SLIME_FRAMES.items()
+        }
+
+    def _anchor(self, rows) -> tuple[int, int, int]:
+        """(left x, right x, y) relative to the pose's top-left corner."""
+        first, last = _cap_span(rows)
+        return first - self.width + 1, last, self.sink - self.height
+
+    def frame_at(self, tick: int) -> int:
+        """Where the idle cycle has got to, as a function of a tick count."""
+        tick %= self.cycle
+        for frame, ticks in self.idle:
+            if tick < ticks:
+                return frame
+            tick -= ticks
+        return 0
 
 
-EAR_ANCHORS = {name: _ear_anchor(rows) for name, rows in SLIME_FRAMES.items()}
+EARS = Accessory(EAR_LEFT, EAR_IDLE, sink=EAR_SINK)
 
 
-class SpriteSheet:
-    """Every sprite, coloured for one character at one day/night step."""
+class CharacterSheet:
+    """One character's poses and accessory, at one day/night step."""
 
-    def __init__(self, palette: Palette, look):
-        body = {
+    def __init__(self, look, accessory: Accessory | None):
+        tones = {
             "@": look.outline,
             "#": look.body,
             "o": look.sheen,
             "*": look.spec,
         }
+        self.poses = {n: build(r, tones) for n, r in SLIME_FRAMES.items()}
+        # Left and right are built together so a character without an accessory
+        # builds neither, rather than paying for ears it never wears.
+        self.accessory = tuple(
+            (build(rows, tones), build(mirrored(rows), tones))
+            for rows in (accessory.frames if accessory else ())
+        )
+
+
+class WorldSheet:
+    """Everything the world draws, at one day/night step.
+
+    Split from the character deliberately. These sprites do not depend on who is
+    playing, and while they shared a sheet every one of them was rebuilt and held
+    once per character. It is also the seam a second scene would need: swapping
+    the world's art and palette leaves the characters untouched.
+    """
+
+    def __init__(self, palette: Palette):
         obstacle = {
             "#": palette.obstacle,
             "o": palette.obstacle_dark,
@@ -348,29 +405,26 @@ class SpriteSheet:
         dust = dict.fromkeys("#o*@", palette.dust)
         moon = dict.fromkeys("#o*@", (246, 244, 222))
 
-        self.slime = {n: build(r, body) for n, r in SLIME_FRAMES.items()}
-        self.ears = tuple(
-            (build(rows, body), build(mirrored(rows), body)) for rows in EAR_LEFT
-        )
-        self.cactus_small = build(CACTUS_SMALL, obstacle)
-        self.cactus_large = build(CACTUS_LARGE, obstacle)
+        # Keyed by Obstacle.kind, so a new ground hazard is an entry here and a
+        # spawn rule, not another branch in the draw code.
+        self.ground = {
+            "small": build(CACTUS_SMALL, obstacle),
+            "large": build(CACTUS_LARGE, obstacle),
+        }
         self.flyer = (build(FLYER_UP, obstacle), build(FLYER_DOWN, obstacle))
         self.clouds = (build(CLOUD_BIG, cloud), build(CLOUD_SMALL, cloud))
         self.moon = build(MOON, moon)
         self.puff = tuple(build(rows, dust) for rows in PUFF)
 
 
-_sheets: dict[tuple[str, int], SpriteSheet] = {}
+_world_sheets: dict[int, WorldSheet] = {}
 
 
-def sheet_for(character, step: int, palette: Palette) -> SpriteSheet:
-    """Return the cached sprite sheet for a character at a day/night step."""
-    from .characters import look_for_step
-
-    key = (character.key, step)
-    if key not in _sheets:
-        _sheets[key] = SpriteSheet(palette, look_for_step(character, step))
-    return _sheets[key]
+def world_sheet(step: int, palette: Palette) -> WorldSheet:
+    """The cached world sheet for a day/night step, built once."""
+    if step not in _world_sheets:
+        _world_sheets[step] = WorldSheet(palette)
+    return _world_sheets[step]
 
 
 # Frame sizes are needed for hitboxes and placement before any sheet is built,

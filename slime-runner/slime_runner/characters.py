@@ -11,6 +11,7 @@ the sky it is standing under.
 
 from dataclasses import dataclass, fields
 
+from . import sprites
 from .palette import STEPS, Color, lerp_color
 
 
@@ -30,7 +31,10 @@ class Character:
     name: str
     day: Look
     night: Look
-    ears: bool = False
+    # None, or art to draw behind the head. A type rather than a per-feature
+    # flag, so a character with horns instead of ears is a different value here
+    # and no new code anywhere.
+    accessory: sprites.Accessory | None = None
 
 
 SLIME = Character(
@@ -67,7 +71,7 @@ CAT = Character(
         spec=(255, 232, 198),
         outline=(120, 56, 18),
     ),
-    ears=True,
+    accessory=sprites.EARS,
 )
 
 CHARACTERS = (SLIME, CAT)
@@ -97,3 +101,20 @@ def look_for_step(character: Character, step: int) -> Look:
             for f in fields(Look)
         }
     )
+
+
+_sheets: dict[tuple[str, int], sprites.CharacterSheet] = {}
+
+
+def sheet_for(character: Character, step: int) -> sprites.CharacterSheet:
+    """The cached art for a character at a day/night step, built once.
+
+    Note what is *not* a parameter: the palette. A character's colours come from
+    itself, so nothing about the world has to be threaded through here.
+    """
+    key = (character.key, step)
+    if key not in _sheets:
+        _sheets[key] = sprites.CharacterSheet(
+            look_for_step(character, step), character.accessory
+        )
+    return _sheets[key]

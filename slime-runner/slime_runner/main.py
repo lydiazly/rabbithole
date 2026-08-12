@@ -17,7 +17,7 @@ import pygame
 
 from . import characters, effects, pixelfont, sprites, world
 from .palette import palette_for_step, step_at, text_tones
-from .slime import HARD_LANDING, Slime, idle_body_frame, idle_ear_frame
+from .slime import HARD_LANDING, Slime, idle_body_frame
 
 SCALE = 3
 DT = 1.0 / 60.0
@@ -51,8 +51,14 @@ TITLE = "title"
 PLAYING = "playing"
 GAME_OVER = "over"
 
-# Where the two character previews stand on the select screen.
-PREVIEW_X = (110, 190)
+
+def preview_positions(count: int) -> list[int]:
+    """Evenly spaced stands for the character previews.
+
+    Computed rather than tabulated: a hardcoded pair of x values was an
+    IndexError the moment a third character existed.
+    """
+    return [round(world.WIDTH * (i + 1) / (count + 1)) for i in range(count)]
 
 
 def load_highscore() -> int:
@@ -217,17 +223,17 @@ class Game:
         palette = palette_for_step(step)
         ink, halo = text_tones(step)
 
-        self.world.draw(
-            self.canvas, palette, step, sprites.sheet_for(self.character, step, palette)
-        )
+        scenery = sprites.world_sheet(step, palette)
+        self.world.draw(self.canvas, palette, step, scenery)
 
         if self.state == SELECT:
-            self.draw_select(step, palette, ink, halo)
+            self.draw_select(step, ink, halo)
         else:
-            sheet = sprites.sheet_for(self.character, step, palette)
-            self.puffs.draw(self.canvas, sheet)
+            self.puffs.draw(self.canvas, scenery)
             self.blit_character(
-                self.character, sheet, self.slime.frame, self.slime.ear_frame,
+                self.character, step, self.slime.frame,
+                self.accessory_frame(self.character, self.slime.accessory_ticks,
+                                     self.slime.idle),
                 self.slime.blit_pos(),
             )
             self.draw_hud(ink, halo)
@@ -235,15 +241,23 @@ class Game:
         pygame.transform.scale(self.canvas, self.screen.get_size(), self.screen)
         pygame.display.flip()
 
-    def blit_character(self, character, sheet, frame, ear_frame, pos) -> None:
-        """Draw one character, ears first so the head overlaps their bases."""
+    @staticmethod
+    def accessory_frame(character, ticks: int, idle: bool) -> int:
+        """Where the accessory's idle cycle is, or frame 0 while acting."""
+        if character.accessory is None or not idle:
+            return 0
+        return character.accessory.frame_at(ticks)
+
+    def blit_character(self, character, step, frame, accessory_frame, pos) -> None:
+        """Draw one character, accessory first so the head overlaps its base."""
+        sheet = characters.sheet_for(character, step)
         left, top = pos
-        if character.ears:
-            ear_left, ear_right = sheet.ears[ear_frame]
-            dx_left, dx_right, dy = sprites.EAR_ANCHORS[frame]
-            self.canvas.blit(ear_left, (left + dx_left, top + dy))
-            self.canvas.blit(ear_right, (left + dx_right, top + dy))
-        self.canvas.blit(sheet.slime[frame], pos)
+        if character.accessory is not None:
+            art_left, art_right = sheet.accessory[accessory_frame]
+            dx_left, dx_right, dy = character.accessory.anchors[frame]
+            self.canvas.blit(art_left, (left + dx_left, top + dy))
+            self.canvas.blit(art_right, (left + dx_right, top + dy))
+        self.canvas.blit(sheet.poses[frame], pos)
 
     def text(self, line: str, y: int, ink, halo, scale: int = 1, x=None) -> None:
         """Centred by default, with a one-pixel shadow so it survives any sky."""
@@ -272,17 +286,19 @@ class Game:
             if self.over_timer >= GAME_OVER_LOCKOUT:
                 self.text("ANY KEY TO CONTINUE", 62, ink, halo)
 
-    def draw_select(self, step, palette, ink, halo) -> None:
+    def draw_select(self, step, ink, halo) -> None:
         self.text("CHOOSE YOUR CHARACTER", 14, ink, halo)
 
         frame = idle_body_frame(self.preview_tick)
-        ear = idle_ear_frame(self.preview_tick)
-        for i, character in enumerate(characters.CHARACTERS):
-            sheet = sprites.sheet_for(character, step, palette)
-            surf = sheet.slime[frame]
-            x = PREVIEW_X[i]
+        for i, (character, x) in enumerate(
+            zip(characters.CHARACTERS, preview_positions(len(characters.CHARACTERS)))
+        ):
+            surf = characters.sheet_for(character, step).poses[frame]
             pos = (x - surf.get_width() // 2, world.GROUND_Y - surf.get_height())
-            self.blit_character(character, sheet, frame, ear, pos)
+            self.blit_character(
+                character, step, frame,
+                self.accessory_frame(character, self.preview_tick, True), pos,
+            )
             self.text(character.name, 88, ink, halo,
                       x=x - pixelfont.text_width(character.name) // 2)
             if i == self.pick:

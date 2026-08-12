@@ -9,6 +9,8 @@ diagonal and collapse into an H with a bar at varying heights — "RUNNER" comes
 out as "RUHHER". The extra two columns are what make those strokes possible.
 """
 
+import pygame
+
 GLYPH_W = 5
 GLYPH_H = 5
 ADVANCE = GLYPH_W + 1
@@ -67,6 +69,27 @@ def text_width(text: str, scale: int = 1) -> int:
     return max(0, (len(text) * ADVANCE - 1) * scale)
 
 
+# Glyphs are rendered pixel by pixel in Python, which is fine once and far too
+# slow every frame: with a drop shadow doubling every string, drawing the HUD
+# this way cost more than drawing the entire rest of the game. Cached per glyph
+# rather than per string, so the set stays bounded no matter what the score
+# reads -- a few dozen glyphs times the two text tones and two scales.
+_cache: dict[tuple[str, tuple, int], pygame.Surface] = {}
+
+
+def _glyph(char: str, color, scale: int) -> pygame.Surface:
+    key = (char, color, scale)
+    surface = _cache.get(key)
+    if surface is None:
+        surface = pygame.Surface((GLYPH_W * scale, GLYPH_H * scale), pygame.SRCALPHA)
+        for row, bits in enumerate(_GLYPHS.get(char, _UNKNOWN)):
+            for col, bit in enumerate(bits):
+                if bit == "#":
+                    surface.fill(color, (col * scale, row * scale, scale, scale))
+        _cache[key] = surface
+    return surface
+
+
 def draw(surface, text: str, x: int, y: int, color, scale: int = 1) -> None:
     """Draw uppercase text with its top-left corner at (x, y).
 
@@ -74,19 +97,9 @@ def draw(surface, text: str, x: int, y: int, color, scale: int = 1) -> None:
     on the same grid as the rest of the art instead of introducing a second,
     finer resolution.
     """
+    color = tuple(color)
     for i, char in enumerate(text.upper()):
-        glyph = _GLYPHS.get(char, _UNKNOWN)
-        gx = x + i * ADVANCE * scale
-        for row, bits in enumerate(glyph):
-            for col, bit in enumerate(bits):
-                if bit != "#":
-                    continue
-                if scale == 1:
-                    surface.set_at((gx + col, y + row), color)
-                else:
-                    surface.fill(
-                        color, (gx + col * scale, y + row * scale, scale, scale)
-                    )
+        surface.blit(_glyph(char, color, scale), (x + i * ADVANCE * scale, y))
 
 
 def draw_centered(surface, text: str, canvas_w: int, y: int, color,
