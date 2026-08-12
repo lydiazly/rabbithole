@@ -136,76 +136,82 @@ SLIME_POSES = {
 # The same seven silhouettes at exactly the same sizes -- a character may not
 # change a hitbox -- but its own face and chin.
 #
-# Built after the Stardew barn cat: a head that reaches full width a row sooner
-# so it reads chunky rather than domed, big two-by-two eyes set wide apart, and
-# a small muzzle -- a two-pixel nose over a two-pixel mouth -- where a wide
-# omega had been taking up half the face. The bottom row is inset so the chin
-# reads round, and it lines up exactly with the hitbox.
+# One-pixel eyes and an omega mouth, which read cuter here than the bigger,
+# simpler face they briefly replaced.
+#
+# The silhouette is rounder than a dome: it tapers at the bottom as well as the
+# top, so the widest part is the middle rather than everything below the brow.
+#
+# The row under the crown is a pixel wider each side than the shape strictly
+# wants, and that is what sets the ears apart. Their anchor is derived from that
+# row -- see Accessory.anchors_for -- so spreading them is a matter of the head
+# they sit on, not an offset bolted onto the drawing code, which is what would
+# put back the notch under the ears that the anchor rule exists to avoid.
 
 CAT_ROUND = (
-    "....@@@@@@....",
-    "..@@oo####@@..",
-    ".@o**o######@.",
+    "...@@@@@@@@...",
+    ".@@oo######@@.",
+    "@#o**o#######@",
     "@#ooo########@",
     "@#oo#########@",
     "@#o##########@",
-    "@#o@@####@@##@",
-    "@##@@####@@##@",
+    "@#o#@####@###@",
+    "@###@####@###@",
     "@############@",
-    "@#####@@#####@",
-    "@####@##@####@",
-    ".@@@@@@@@@@@@.",
+    "@###@#@@#@###@",
+    ".@###@##@###@.",
+    "..@@@@@@@@@@..",
 )
 
 CAT_ROUND_B = (
-    "....@@@@@@....",
-    "..@@oo####@@..",
-    ".@o**o######@.",
+    "...@@@@@@@@...",
+    ".@@oo######@@.",
+    "@#o**o#######@",
     "@#ooo########@",
     "@#oo#########@",
-    "@#o@@####@@##@",
-    "@##@@####@@##@",
+    "@#o#@####@###@",
+    "@###@####@###@",
     "@############@",
-    "@#####@@#####@",
-    "@####@##@####@",
-    ".@@@@@@@@@@@@.",
+    "@###@#@@#@###@",
+    ".@###@##@###@.",
+    "..@@@@@@@@@@..",
 )
 
 CAT_STRETCH1 = (
     "...@@@@@@...",
-    "..@@oo##@@..",
-    ".@o**o####@.",
-    ".@ooo#####@.",
+    ".@@oo####@@.",
+    "@#o**o#####@",
     "@#ooo######@",
     "@#oo#######@",
     "@#o########@",
-    "@#@@####@@#@",
-    "@#@@####@@#@",
+    "@#o########@",
+    "@#o@####@##@",
+    "@##@####@##@",
     "@##########@",
-    "@####@@####@",
-    "@###@##@###@",
-    "@##########@",
-    ".@@@@@@@@@@.",
+    "@##@#@@#@##@",
+    ".@##@##@##@.",
+    ".@########@.",
+    "..@@@@@@@@..",
 )
 
 CAT_STRETCH2 = (
     "...@@@@...",
-    ".@@oo#@@@.",
-    ".@o**o##@.",
-    ".@ooo###@.",
+    "@@oo####@@",
+    "@#o**o###@",
     "@#ooo####@",
     "@#oo#####@",
     "@#o######@",
-    "@#@@##@@#@",
-    "@#@@##@@#@",
+    "@#o@##@##@",
+    "@##@##@##@",
     "@########@",
-    "@###@@###@",
+    "@#@#@@#@#@",
     "@##@##@##@",
     "@########@",
     "@########@",
     "@########@",
-    "@########@",
-    ".@@@@@@@@.",
+    ".@######@.",
+    ".@######@.",
+    "..@@@@@@..",
 )
 
 CAT_SQUASH1 = (
@@ -213,32 +219,32 @@ CAT_SQUASH1 = (
     "..@@oo######@@..",
     ".@o**o########@.",
     "@#ooo##########@",
-    "@#o@@######@@##@",
-    "@##@@######@@##@",
+    "@#oo@######@###@",
+    "@#o#@######@###@",
     "@##############@",
-    "@######@@######@",
-    "@#####@##@#####@",
-    ".@@@@@@@@@@@@@@.",
+    "@####@#@@#@####@",
+    ".@####@##@####@.",
+    "..@@@@@@@@@@@@..",
 )
 
 CAT_SQUASH2 = (
     "....@@@@@@@@@@....",
     "..@oo##########@..",
     ".@o**o##########@.",
-    "@#oo@@######@@###@",
-    "@#o#@@######@@###@",
-    "@#######@@#######@",
-    "@######@##@######@",
-    ".@@@@@@@@@@@@@@@@.",
+    "@#ooo@######@####@",
+    "@#o##@######@####@",
+    "@#####@#@@#@#####@",
+    ".@#####@##@#####@.",
+    "..@@@@@@@@@@@@@@..",
 )
 
 CAT_SQUASH3 = (
     ".....@@@@@@@@@@.....",
     "..@o**o##########@..",
-    "@#oo#@@######@@####@",
-    "@#o##@@######@@####@",
+    "@#ooo#@######@#####@",
     "@########@@########@",
-    ".@@@@@@@@@@@@@@@@@@.",
+    ".@################@.",
+    "..@@@@@@@@@@@@@@@@..",
 )
 
 CAT_POSES = {
