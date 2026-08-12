@@ -775,10 +775,18 @@ def test_the_dash_exit_needs_room_to_react():
     Gaps spawned before the dash arrive in 0.52s once boosted, under the 0.60s a
     jump needs. That is fine while invincible, and the clock running out mid-gap
     is what would not be.
+
+    A jump's own airtime is the floor, and the earlier 0.40 was below it, which
+    is a subtler version of the same death: the gap looks jumpable and the
+    obstacle is already inside the arc by the time the player commits. Comparing
+    against JUMP_AIRTIME rather than a number keeps the two tied together if
+    either is retuned.
     """
-    assert main.DASH_EXIT_CLEARANCE > 0
-    # The clearance has to be long enough to see and answer an obstacle.
-    assert main.DASH_EXIT_CLEARANCE * wd.SPEED_MAX > wd.LARGE_BOX[0] * 4
+    assert main.DASH_EXIT_CLEARANCE >= wd.JUMP_AIRTIME, (
+        "the dash can end closer than a jump takes"
+    )
+    # And room on top of the jump to see the obstacle and choose to make it.
+    assert main.DASH_EXIT_REACTION > 0
 
 
 def test_pausing_freezes_the_run_and_only_the_run():

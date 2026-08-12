@@ -387,3 +387,48 @@ def test_a_launched_obstacle_stops_being_dangerous():
     for _ in range(20):
         w.update(DT, PLAYER_X)
     assert ob.y < start_y, "should be flying"
+
+
+def test_a_smashed_obstacle_is_thrown_up_and_forward():
+    """Up and to the right, at every speed the ramp can be at.
+
+    Forward is the whole point of the effect and it is a sign flip away from
+    backwards: the scroll drags everything left, so beating it is what makes a
+    hit read as a hit. Swept across the ramp because the launch speed is a
+    fraction of the scroll -- a fraction cannot change sign, and this is what
+    says so.
+    """
+    for speed in range(int(wd.SPEED_START), int(wd.SPEED_MAX) + 1, 5):
+        for boost in (1.0, 1.6):
+            w = wd.World(scenes.DEFAULT, random.Random(3))
+            w.speed, w.boost = float(speed), boost
+            ob = wd.Obstacle(60.0, wd.GROUND_Y - 11, *wd.SMALL_BOX, "small")
+            w.obstacles = [ob]
+            w.launch(ob)
+            x0, y0 = ob.x, ob.y
+            for _ in range(12):
+                w.update(DT, PLAYER_X)
+            where = f"speed={speed} boost={boost}"
+            assert ob.x > x0, f"thrown backwards at {where}"
+            assert ob.y < y0, f"never left the ground at {where}"
+
+
+def test_a_smashed_obstacle_leaves_by_the_top_and_is_culled():
+    """It should clear the top of the screen, not arc back down into frame.
+
+    Falling back would read as debris rather than as something hit hard, and a
+    launched obstacle that never leaves the list is a leak -- it is invisible but
+    still updated for the rest of the run.
+    """
+    w = wd.World(scenes.DEFAULT, random.Random(4))
+    w.speed, w.boost = wd.SPEED_MAX, 1.6
+    ob = wd.Obstacle(60.0, wd.GROUND_Y - 11, *wd.SMALL_BOX, "small")
+    w.obstacles = [ob]
+    w.launch(ob)
+    for _ in range(200):
+        w.update(DT, PLAYER_X)
+        if ob not in w.obstacles:
+            break
+    assert ob not in w.obstacles, "launched obstacle was never culled"
+    assert ob.y + ob.h <= 0, f"left sideways or downwards, at y={ob.y:.0f}"
+    assert ob.x < wd.WIDTH, "reached the right edge before rising off the top"

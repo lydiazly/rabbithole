@@ -84,10 +84,19 @@ def points_for(ob) -> int:
     return 1 + max(0, int((ob.h - SMALL_BOX[1]) // SCORE_HEIGHT_STEP))
 
 
-# How much of the launch a smashed obstacle gets, and how fast it falls away.
-LAUNCH_SPEED = 190.0
-LAUNCH_DRIFT = 90.0
-LAUNCH_GRAVITY = 520.0
+# A smashed obstacle is knocked up and forward, off the top-right of the screen.
+#
+# Forward is the whole point and it is easy to get backwards: the scroll carries
+# everything left, so an obstacle needs to beat the scroll to look thrown rather
+# than merely dropped. Its speed is therefore a fraction of the scroll rather
+# than an absolute -- hitting something at 328px/s should send it further than
+# hitting it at 136 -- and being a fraction, the direction cannot flip when the
+# speed ramp moves.
+LAUNCH_FORWARD = 0.55  # times the scroll, rightward on screen
+# Gravity only has to bend the line into an arc. Enough to fall back and it would
+# arc down out of frame instead, which reads as debris rather than a hit.
+LAUNCH_SPEED = 210.0
+LAUNCH_GRAVITY = 120.0
 LAUNCH_SPIN = 9.0  # quarter-turns per second
 
 # Difficulty is measured as progress along the speed ramp, not as wall-clock time
@@ -190,10 +199,9 @@ class Obstacle:
     # A cannot farm the same cactus twice.
     scored: bool = False
     # Set when smashed during a dash. A launched obstacle stops colliding and
-    # tumbles away under its own gravity.
+    # tumbles away up and to the right.
     launched: bool = False
     vy: float = 0.0
-    drift: float = 0.0
 
     def rect(self):
         return (self.x, self.y, self.w, self.h)
@@ -290,18 +298,22 @@ class World:
 
         cleared = 0
         for ob in self.obstacles:
-            ob.x -= step
             ob.phase += dt
             if ob.launched:
+                # Thrown ahead of the world rather than carried back by it, so
+                # the scroll is replaced here and not merely added to.
+                ob.x += step * LAUNCH_FORWARD
                 ob.vy += LAUNCH_GRAVITY * dt
                 ob.y += ob.vy * dt
-                ob.x -= ob.drift * dt
-            elif not ob.scored and ob.x + ob.w < player_x:
+                continue
+            ob.x -= step
+            if not ob.scored and ob.x + ob.w < player_x:
                 ob.scored = True
                 cleared += points_for(ob)
         self.obstacles = [
             ob for ob in self.obstacles
-            if ob.x + ob.w > -16.0 and ob.y < HEIGHT + 20
+            if ob.x + ob.w > -16.0 and ob.x < WIDTH + 20
+            and -20 < ob.y + ob.h and ob.y < HEIGHT + 20
         ]
 
         self.since_spawn += step
@@ -363,7 +375,6 @@ class World:
         ob.launched = True
         ob.scored = True
         ob.vy = -LAUNCH_SPEED
-        ob.drift = LAUNCH_DRIFT
 
     # -- drawing ----------------------------------------------------------
 

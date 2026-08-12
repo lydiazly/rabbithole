@@ -70,7 +70,12 @@ DASH_SHIMMER_TICKS = 3  # frames per palette step, while dashing
 # an obstacle already a few pixels away. That is a death the reward caused and
 # the player could not have avoided, so the dash holds past zero, still smashing
 # and so still clearing the way, until there is room to react.
-DASH_EXIT_CLEARANCE = 0.40  # seconds of travel at the restored speed
+# A jump's own airtime is the floor and 0.40 was under it: an obstacle that close
+# is already inside the arc by the time the player commits, so the jump that
+# looked available never was. On top of the airtime goes a beat to see the
+# obstacle and decide, which is the part that was missing.
+DASH_EXIT_REACTION = 0.30
+DASH_EXIT_CLEARANCE = world.JUMP_AIRTIME + DASH_EXIT_REACTION
 
 # The last stretch of a dash, where it starts telling you it is about to go: the
 # shimmer doubles its rate and the meter blinks. Ending it silently was the one
