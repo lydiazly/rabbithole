@@ -4,3 +4,10 @@ version = "0.1.0"
 description = "A minimal terminal breakout game"
 requires-python = ">=3.10"
 dependencies = []
+
+[project.scripts]
+breakout = "breakout:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

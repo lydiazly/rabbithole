@@ -42,13 +42,10 @@ description() {
     ' "$1/pyproject.toml"
 }
 
-# What to hand `uv run`. A project that declares a console script names its own
-# entry point; the rest are single-file games, where the one top-level module is
-# the game. Anything else is ambiguous and says so rather than guessing.
+# What to hand `uv run`. Every game names its own entry point under
+# [project.scripts], so this reads it rather than guessing from the file layout.
 entry_point() {
-    local dir=$1 script modules
-
-    script=$(awk '
+    awk '
         /^\[project\.scripts\]/ { in_scripts = 1; next }
         /^\[/                   { in_scripts = 0 }
         in_scripts && /=/ {
@@ -57,23 +54,14 @@ entry_point() {
             print
             exit
         }
-    ' "$dir/pyproject.toml")
-
-    if [[ -n $script ]]; then
-        printf '%s' "$script"
-        return 0
-    fi
-
-    modules=("$dir"/*.py)
-    [[ -e ${modules[0]} ]] || return 1
-    ((${#modules[@]} == 1)) || return 1
-    basename "${modules[0]}"
+    ' "$1/pyproject.toml"
 }
 
 launch() {
     local dir=$1 entry
-    entry=$(entry_point "$dir") || die \
-        "Don't know how to start '$dir': it declares no [project.scripts] and has no single top-level .py file."
+    entry=$(entry_point "$dir")
+    [[ -n $entry ]] || die \
+        "Don't know how to start '$dir': its pyproject.toml declares no [project.scripts] entry."
     printf '\n  starting %s\n\n' "$dir"
     cd "$dir"
     # exec so the game owns the terminal, and its exit code becomes ours.
