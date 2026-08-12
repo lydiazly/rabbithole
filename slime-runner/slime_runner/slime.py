@@ -9,13 +9,37 @@ than as a decaying oscillation.
 All units are low-resolution canvas pixels.
 """
 
+import math
+
 from .sprites import SLIME_SIZES
 
 # Rising is gentler than falling: the arc hangs at the top and lands with weight.
-GRAVITY_UP = 700.0
-GRAVITY_DOWN = 1050.0
-JUMP_SPEED = 210.0
-JUMP_CUT_SPEED = 70.0  # releasing early while rising clamps to this, giving a hop
+#
+# Height and airtime are raised together on purpose. Simply increasing the launch
+# speed would buy clearance at the cost of a longer, floatier hang, and airtime is
+# what the spawn-gap floor in world.py is keyed to — the obstacles would have to
+# spread out to stay fair and the fast half of a run would go empty. Scaling
+# gravity by the same factor gives a jump that peaks at 40 px instead of 31, in
+# 0.53 s rather than 0.55.
+GRAVITY_UP = 950.0
+GRAVITY_DOWN = 1425.0
+JUMP_SPEED = 283.0
+JUMP_CUT_SPEED = 100.0  # releasing early while rising clamps to this, giving a hop
+
+# The mid-air second jump, expressed in height rather than in speed.
+#
+# Speed is the wrong currency here. Replacing the velocity means an early press
+# does nothing or actively slows the ascent, so the height is only there for a
+# frame-perfect apex press. Adding to the velocity is forgiving but unbounded in
+# height: a press halfway up keeps most of the rise already banked *and* gets the
+# full addition, which sends the slime clean off the top of the screen.
+#
+# Working in height fixes both. The second jump tops the flight up by
+# DOUBLE_JUMP_RISE and the apex is clamped to MAX_APEX, so every press from
+# takeoff to apex converges on the same ceiling and none of them can overshoot it.
+MAX_JUMPS = 2
+DOUBLE_JUMP_RISE = 18.0
+MAX_APEX = 62.0
 
 LATERAL_SPEED = 85.0
 
@@ -69,6 +93,7 @@ class Slime:
         self.vy = 0.0
         self.on_ground = True
         self.ducking = False
+        self.jumps_used = 0
         self.frame = "round"
         self._clip = None
         self._clip_i = 0
@@ -98,13 +123,25 @@ class Slime:
 
     # -- motion -----------------------------------------------------------
 
-    def jump(self) -> None:
-        if not self.on_ground:
-            return
-        self.vy = -JUMP_SPEED
-        self.on_ground = False
-        self.ducking = False
+    def jump(self) -> str | None:
+        """Start a jump. Returns "ground", "air", or None if none was available."""
+        if self.on_ground:
+            self.vy = -JUMP_SPEED
+            self.on_ground = False
+            self.ducking = False
+            self.jumps_used = 1
+            self._play(TAKEOFF)
+            return "ground"
+        if self.jumps_used >= MAX_JUMPS:
+            return None
+        self.jumps_used += 1
+        height = self.ground_y - self.y
+        rise_left = self.vy**2 / (2.0 * GRAVITY_UP) if self.vy < 0.0 else 0.0
+        # Never below rise_left: the second jump must not be able to slow you down.
+        target = max(rise_left, min(rise_left + DOUBLE_JUMP_RISE, MAX_APEX - height))
+        self.vy = -math.sqrt(2.0 * GRAVITY_UP * target)
         self._play(TAKEOFF)
+        return "air"
 
     def splat(self) -> None:
         """The game-over flop."""
@@ -134,6 +171,7 @@ class Slime:
                 self.y = self.ground_y
                 self.vy = 0.0
                 self.on_ground = True
+                self.jumps_used = 0
                 self.ducking = ducking
                 self._play(LAND_HARD if impact >= HARD_LANDING else LAND_SOFT)
 

@@ -129,9 +129,14 @@ class Game:
             return
 
         self.jump_buffer = max(0.0, self.jump_buffer - dt)
-        if self.jump_buffer > 0.0 and self.slime.on_ground:
-            self.jump_buffer = 0.0
-            self.slime.jump()
+        if self.jump_buffer > 0.0:
+            kind = self.slime.jump()
+            if kind:
+                self.jump_buffer = 0.0
+            if kind == "air":
+                # A puff under its feet in mid-air is the only signal that the
+                # second jump has been spent.
+                self.puffs.burst(self.slime.x, self.slime.y, False)
 
         self.world.update(dt)
         impact = self.slime.update(dt, holding_jump, ducking, lateral, X_MIN, X_MAX)
@@ -171,10 +176,11 @@ class Game:
         )
 
         if self.state == TITLE:
-            pixelfont.draw_centered(self.canvas, "SLIME RUNNER", world.WIDTH, 28, ink, 2)
-            pixelfont.draw_centered(self.canvas, "SPACE OR W - JUMP", world.WIDTH, 48, ink)
-            pixelfont.draw_centered(self.canvas, "S - DUCK   A/D - SHIFT", world.WIDTH, 57, ink)
-            pixelfont.draw_centered(self.canvas, "Q - QUIT", world.WIDTH, 66, ink)
+            pixelfont.draw_centered(self.canvas, "SLIME RUNNER", world.WIDTH, 22, ink, 2)
+            pixelfont.draw_centered(self.canvas, "SPACE OR W - JUMP", world.WIDTH, 40, ink)
+            pixelfont.draw_centered(self.canvas, "JUMP AGAIN IN AIR TO DOUBLE", world.WIDTH, 49, ink)
+            pixelfont.draw_centered(self.canvas, "S - DUCK   A/D - SHIFT", world.WIDTH, 58, ink)
+            pixelfont.draw_centered(self.canvas, "Q - QUIT", world.WIDTH, 67, ink)
         elif self.state == GAME_OVER:
             pixelfont.draw_centered(self.canvas, "GAME OVER", world.WIDTH, 30, ink, 2)
             pixelfont.draw_centered(

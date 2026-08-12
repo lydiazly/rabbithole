@@ -87,6 +87,7 @@ def test_hud_and_title_strings_fit_the_canvas():
         ("HI 00000  00000", 1),
         ("SLIME RUNNER", 2),
         ("SPACE OR W - JUMP", 1),
+        ("JUMP AGAIN IN AIR TO DOUBLE", 1),
         ("S - DUCK   A/D - SHIFT", 1),
         ("GAME OVER", 2),
         ("R - RUN AGAIN   Q - QUIT", 1),
@@ -139,6 +140,96 @@ def test_the_apex_is_round():
             apex_frame = s.frame
         prev_vy = s.vy
     assert apex_frame == "round"
+
+
+# -- jumping ----------------------------------------------------------------
+
+
+def jump_flight(second_jump_at=None):
+    """Fly one jump, optionally pressing again on tick `second_jump_at`.
+
+    Returns (peak height above the ground, airtime, highest sprite top edge).
+    """
+    s = make_slime()
+    s.jump()
+    peak, top, tick = 0.0, GROUND, 0
+    while not s.on_ground:
+        if tick == second_jump_at:
+            s.jump()
+        s.update(DT, True, False, 0, -1e6, 1e6)
+        peak = max(peak, GROUND - s.y)
+        top = min(top, s.blit_pos()[1])
+        tick += 1
+    return peak, tick * DT, top
+
+
+APEX_TICK = round(sl.JUMP_SPEED / sl.GRAVITY_UP / DT)
+
+
+def test_a_single_jump_clears_the_tallest_obstacle_with_room_to_spare():
+    peak, _, _ = jump_flight()
+    assert peak > wd.LARGE_BOX[1] + sprites.SLIME_SIZES["round"][1]
+
+
+def test_a_second_jump_goes_meaningfully_higher():
+    single, _, _ = jump_flight()
+    double, _, _ = jump_flight(second_jump_at=APEX_TICK)
+    assert double > single * 1.35
+
+
+def test_double_jump_timing_is_forgiving():
+    """A quick double tap and a patient apex press must reach similar heights.
+
+    Topping the flight up to a clamped apex is what buys this; a second jump that
+    replaced the velocity would only pay off within a few ticks of the apex.
+    """
+    tapped, _, _ = jump_flight(second_jump_at=1)
+    apex, _, _ = jump_flight(second_jump_at=APEX_TICK)
+    assert min(tapped, apex) / max(tapped, apex) > 0.9
+
+
+def test_the_slime_never_leaves_the_top_of_the_canvas():
+    """Swept over every tick of the ascent, not sampled.
+
+    The worst case is not the apex press but a press partway up, which banks the
+    height already climbed and then adds to it. Sampling a few timings missed it.
+    """
+    for when in range(0, APEX_TICK + 12):
+        _, _, top = jump_flight(second_jump_at=when)
+        assert top >= 0, when
+
+
+def test_no_press_timing_beats_the_apex_ceiling():
+    for when in range(0, APEX_TICK + 12):
+        peak, _, _ = jump_flight(second_jump_at=when)
+        assert peak <= sl.MAX_APEX + 1.0, (when, peak)
+
+
+def test_only_two_jumps_are_available_per_flight():
+    s = make_slime()
+    assert s.jump() == "ground"
+    assert s.jump() == "air"
+    assert s.jump() is None
+
+
+def test_landing_restores_the_second_jump():
+    s = make_slime()
+    s.jump()
+    s.jump()
+    while not s.on_ground:
+        s.update(DT, True, False, 0, -1e6, 1e6)
+    assert s.jump() == "ground"
+
+
+def test_a_second_jump_never_slows_an_ascent():
+    for when in range(0, APEX_TICK + 1, 3):
+        s = make_slime()
+        s.jump()
+        for _ in range(when):
+            s.update(DT, True, False, 0, -1e6, 1e6)
+        before = s.vy
+        s.jump()
+        assert s.vy <= before, when
 
 
 def test_idle_alternates_between_the_two_resting_frames():
