@@ -1,9 +1,12 @@
-"""The world's two colour sets, quantised into a handful of day/night steps.
+"""How day and night work — not what any particular place looks like.
 
-Everything downstream — sprites, the sky, the HUD — is cached against the step
-index rather than against a continuous blend. Quantising is both cheaper and more
-honest to the look: classic runners flip between a day and a night palette, they
-do not cross-fade.
+This module owns the mechanism: the shape of a colour record, the quantised
+steps, and the blend between a day set and a night set. The actual colours belong
+to a scene, and characters carry their own; both blend through `blend` here so
+they stay lit consistently with each other.
+
+Quantising is both cheaper and more honest to the look: classic runners flip
+between a day and a night palette, they do not cross-fade.
 """
 
 from dataclasses import dataclass, fields
@@ -17,6 +20,13 @@ STEPS = 8
 
 @dataclass(frozen=True)
 class Palette:
+    """Every colour a scene draws with.
+
+    A scene supplies one of these for day and one for night. Colours for layers
+    the scene has switched off are never read, but are still required: a palette
+    with holes in it would have to be checked everywhere it is used.
+    """
+
     sky: Color
     horizon: Color
     hill_far: Color
@@ -28,46 +38,10 @@ class Palette:
     obstacle_dark: Color
     dust: Color
     cloud: Color
+    star: Color
+    moon: Color
     text: Color
 
-
-DAY = Palette(
-    sky=(155, 209, 229),
-    horizon=(190, 228, 240),
-    hill_far=(137, 190, 209),
-    hill_near=(106, 165, 190),
-    ground=(206, 184, 145),
-    ground_line=(150, 128, 96),
-    speckle=(176, 154, 118),
-    obstacle=(86, 130, 84),
-    obstacle_dark=(52, 92, 58),
-    dust=(190, 170, 134),
-    cloud=(246, 252, 255),
-    text=(44, 62, 74),
-)
-
-NIGHT = Palette(
-    sky=(22, 26, 56),
-    horizon=(44, 40, 82),
-    hill_far=(38, 42, 80),
-    hill_near=(26, 30, 60),
-    ground=(58, 54, 78),
-    # Both of these stay *darker* than their own ground, exactly as the day pair
-    # does. Flipping the direction would make the two ramps cross mid-dusk and the
-    # ground would go flat and detail-less for the whole transition.
-    ground_line=(34, 30, 52),
-    speckle=(42, 38, 60),
-    # These, by contrast, deliberately flip: an obstacle has to stand out from the
-    # background, and at night that means lighter, not darker. The hue difference
-    # keeps them readable at the crossover steps too.
-    obstacle=(146, 152, 180),
-    obstacle_dark=(96, 102, 132),
-    dust=(92, 88, 118),
-    cloud=(88, 90, 124),
-    text=(222, 228, 246),
-)
-
-STAR = (255, 255, 255)
 
 # Fraction of a cycle spent moving between the two sets; the rest is held at one
 # end or the other. The middle steps are where every pair of colours is closest
@@ -107,38 +81,29 @@ def lerp_color(a: Color, b: Color, t: float) -> Color:
     )
 
 
-def palette_for_step(step: int) -> Palette:
-    """Return the palette for a quantised step."""
+def blend(day, night, step: int):
+    """Interpolate two matching colour records at a quantised step.
+
+    Works on any frozen dataclass whose fields are all colours, which is how a
+    scene's palette and a character's look share one implementation rather than
+    two copies that could drift apart.
+    """
     step = min(STEPS - 1, max(0, step))
     if step == 0:
-        return DAY
+        return day
     if step == STEPS - 1:
-        return NIGHT
+        return night
     t = step / (STEPS - 1)
-    return Palette(
+    return type(day)(
         **{
-            f.name: lerp_color(getattr(DAY, f.name), getattr(NIGHT, f.name), t)
-            for f in fields(Palette)
+            f.name: lerp_color(getattr(day, f.name), getattr(night, f.name), t)
+            for f in fields(day)
         }
     )
 
 
 def luminance(color: Color) -> float:
     return 0.299 * color[0] + 0.587 * color[1] + 0.114 * color[2]
-
-
-def text_tones(step: int) -> tuple[Color, Color]:
-    """Return (ink, shadow) for text drawn over the sky at this step.
-
-    Keyed to how bright the sky actually is, not to whether it is night. Tying it
-    to `is_night` left dark text on an already-dark sky for the steps in between:
-    contrast bottomed out at 18 of 255, which is invisible. The shadow covers the
-    one step either side of the switch, where whichever tone is chosen is closest
-    to the background.
-    """
-    if luminance(palette_for_step(step).sky) > 128.0:
-        return DAY.text, NIGHT.text
-    return NIGHT.text, DAY.text
 
 
 def is_night(step: int) -> bool:

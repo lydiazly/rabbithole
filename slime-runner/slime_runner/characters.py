@@ -9,10 +9,10 @@ same quantised steps the world does, so a character stays lit consistently with
 the sky it is standing under.
 """
 
-from dataclasses import dataclass, fields
+from dataclasses import dataclass
 
 from . import sprites
-from .palette import STEPS, Color, lerp_color
+from .palette import Color, blend
 
 
 @dataclass(frozen=True)
@@ -87,20 +87,7 @@ def by_key(key: str) -> Character:
 
 def look_for_step(character: Character, step: int) -> Look:
     """The character's colours at a quantised day/night step."""
-    step = min(STEPS - 1, max(0, step))
-    if step == 0:
-        return character.day
-    if step == STEPS - 1:
-        return character.night
-    t = step / (STEPS - 1)
-    return Look(
-        **{
-            f.name: lerp_color(
-                getattr(character.day, f.name), getattr(character.night, f.name), t
-            )
-            for f in fields(Look)
-        }
-    )
+    return blend(character.day, character.night, step)
 
 
 _sheets: dict[tuple[str, int], sprites.CharacterSheet] = {}

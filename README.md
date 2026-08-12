@@ -23,11 +23,12 @@ paddle angles it that way. Three lives.
 
 ## slime-runner
 
-A window. Endless runner. Pick a character — a slime or an orange cat, which
-differ in looks only — then `space` or `W` to jump, and again in mid-air for a
-second jump worth about half as much height on top; the timing is forgiving. `S`
-flattens you under low flyers, and `A`/`D` shift where you stand, further back
-buying reaction time. `C` goes back to the character screen.
+A window. Endless runner. Pick a character and a place to run through — a slime
+or an orange cat, a desert or a snowfield; both choices are looks only, and
+neither changes the difficulty. Then `space` or `W` to jump, and again in mid-air
+for a second jump worth about half as much height on top; the timing is
+forgiving. `S` flattens you under low flyers, and `A`/`D` shift where you stand,
+further back buying reaction time. `C` returns to the select screen.
 
 It opens easy — nothing but single cacti while you find the jump — and adds
 taller ones, clusters and flyers as it speeds up. Your best run is saved.

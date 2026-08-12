@@ -15,8 +15,8 @@ from pathlib import Path
 
 import pygame
 
-from . import characters, effects, pixelfont, sprites, world
-from .palette import palette_for_step, step_at, text_tones
+from . import characters, effects, pixelfont, scenes, world
+from .palette import step_at
 from .slime import HARD_LANDING, Slime, idle_body_frame
 
 SCALE = 3
@@ -28,6 +28,8 @@ X_MIN = 22.0
 X_MAX = 110.0
 
 JUMP_KEYS = (pygame.K_SPACE, pygame.K_UP, pygame.K_w, pygame.K_RETURN)
+# On the select screen up/down change row, so only these confirm a choice.
+CONFIRM_KEYS = (pygame.K_SPACE, pygame.K_RETURN)
 DUCK_KEYS = (pygame.K_DOWN, pygame.K_s)
 LEFT_KEYS = (pygame.K_LEFT, pygame.K_a)
 RIGHT_KEYS = (pygame.K_RIGHT, pygame.K_d)
@@ -35,6 +37,12 @@ QUIT_KEYS = (pygame.K_ESCAPE, pygame.K_q)
 RESTART_KEYS = (pygame.K_r,)
 SELECT_KEYS = (pygame.K_c,)
 PICK_KEYS = (pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4)
+ROW_UP_KEYS = (pygame.K_UP, pygame.K_w)
+ROW_DOWN_KEYS = (pygame.K_DOWN, pygame.K_s)
+
+# The select screen's two rows, top to bottom.
+SCENE_ROW = 0
+CHARACTER_ROW = 1
 
 JUMP_BUFFER = 0.12  # a press just before landing still counts
 
@@ -83,12 +91,14 @@ class Game:
         self.clock = pygame.time.Clock()
         self.canvas = pygame.Surface((world.WIDTH, world.HEIGHT))
 
-        self.world = world.World(self.rng)
+        self.scene = scenes.DEFAULT
+        self.world = world.World(self.scene, self.rng)
         self.slime = Slime(START_X, world.GROUND_Y)
         self.puffs = effects.Puffs()
 
         self.character = characters.DEFAULT
-        self.pick = 0
+        self.picks = {SCENE_ROW: 0, CHARACTER_ROW: 0}
+        self.row = CHARACTER_ROW
         self.preview_tick = 0
         self.highscore = load_highscore()
         self.over_timer = 0.0
@@ -97,16 +107,25 @@ class Game:
 
     # -- state transitions ------------------------------------------------
 
+    @property
+    def previewed_scene(self):
+        """The scene under the cursor -- the select screen renders it live."""
+        return scenes.SCENES[self.picks[SCENE_ROW]]
+
+    @property
+    def previewed_character(self):
+        return characters.CHARACTERS[self.picks[CHARACTER_ROW]]
+
     def go_to_select(self) -> None:
         self.state = SELECT
         self.preview_tick = 0
-        self.world.reset()
+        self.world.use_scene(self.previewed_scene)
         self.slime.reset()
         self.puffs.clear()
 
     def go_to_title(self) -> None:
         self.state = TITLE
-        self.world.reset()
+        self.world.use_scene(self.scene)
         self.slime.reset()
         self.puffs.clear()
         self.jump_buffer = 0.0
@@ -164,17 +183,33 @@ class Game:
                 self.go_to_title()
         return True
 
+    def row_options(self, row: int):
+        return scenes.SCENES if row == SCENE_ROW else characters.CHARACTERS
+
     def select_key(self, key: int) -> None:
-        count = len(characters.CHARACTERS)
+        count = len(self.row_options(self.row))
+        moved = True
         if key in LEFT_KEYS:
-            self.pick = (self.pick - 1) % count
+            self.picks[self.row] = (self.picks[self.row] - 1) % count
         elif key in RIGHT_KEYS:
-            self.pick = (self.pick + 1) % count
+            self.picks[self.row] = (self.picks[self.row] + 1) % count
         elif key in PICK_KEYS[:count]:
-            self.pick = PICK_KEYS.index(key)
-        elif key in JUMP_KEYS:
-            self.character = characters.CHARACTERS[self.pick]
+            self.picks[self.row] = PICK_KEYS.index(key)
+        elif key in ROW_UP_KEYS:
+            self.row = SCENE_ROW
+        elif key in ROW_DOWN_KEYS:
+            self.row = CHARACTER_ROW
+        elif key in CONFIRM_KEYS:
+            self.scene = self.previewed_scene
+            self.character = self.previewed_character
             self.go_to_title()
+            return
+        else:
+            moved = False
+        if moved:
+            # The backdrop is the previewed scene, so moving the scene cursor has
+            # to rebuild it -- the layers it uses may differ.
+            self.world.use_scene(self.previewed_scene)
 
     def update(self, dt: float) -> None:
         if self.state == SELECT:
@@ -219,11 +254,12 @@ class Game:
     # -- drawing ----------------------------------------------------------
 
     def draw(self) -> None:
+        scene = self.previewed_scene if self.state == SELECT else self.scene
         step = step_at(self.world.phase)
-        palette = palette_for_step(step)
-        ink, halo = text_tones(step)
+        palette = scenes.palette_for_step(scene, step)
+        ink, halo = scenes.text_tones(scene, step)
 
-        scenery = sprites.world_sheet(step, palette)
+        scenery = scenes.sheet_for(scene, step)
         self.world.draw(self.canvas, palette, step, scenery)
 
         if self.state == SELECT:
@@ -287,8 +323,17 @@ class Game:
                 self.text("ANY KEY TO CONTINUE", 62, ink, halo)
 
     def draw_select(self, step, ink, halo) -> None:
-        self.text("CHOOSE YOUR CHARACTER", 14, ink, halo)
+        # The backdrop already *is* the previewed scene, so the scene row needs
+        # only names -- the preview is the whole screen behind them.
+        self.text("SCENE", 8, ink, halo)
+        scene_xs = preview_positions(len(scenes.SCENES))
+        for i, (scene, x) in enumerate(zip(scenes.SCENES, scene_xs)):
+            self.text(scene.name, 24, ink, halo,
+                      x=x - pixelfont.text_width(scene.name) // 2)
+            if i == self.picks[SCENE_ROW]:
+                self.draw_marker(x, 17, ink, active=self.row == SCENE_ROW)
 
+        self.text("CHARACTER", 50, ink, halo)
         frame = idle_body_frame(self.preview_tick)
         for i, (character, x) in enumerate(
             zip(characters.CHARACTERS, preview_positions(len(characters.CHARACTERS)))
@@ -301,16 +346,22 @@ class Game:
             )
             self.text(character.name, 88, ink, halo,
                       x=x - pixelfont.text_width(character.name) // 2)
-            if i == self.pick:
-                self.draw_marker(x, 62, ink)
+            if i == self.picks[CHARACTER_ROW]:
+                self.draw_marker(x, 62, ink, active=self.row == CHARACTER_ROW)
 
-        self.text("A/D  PICK    SPACE  START", 98, ink, halo)
+        self.text("A/D PICK  W/S ROW  SPACE GO", 98, ink, halo)
 
-    def draw_marker(self, x: int, y: int, ink) -> None:
-        """A small downward wedge over the highlighted character."""
-        for row in range(3):
+    def draw_marker(self, x: int, y: int, ink, active: bool = True) -> None:
+        """A downward wedge over the current pick.
+
+        Both rows keep their marker so the chosen pair is always readable; the
+        row the keys are driving gets the full wedge, the other a flat bar.
+        """
+        rows = 3 if active else 1
+        for row in range(rows):
             width = 5 - row * 2
-            self.canvas.fill(ink, (x - width // 2, y + row, width, 1))
+            self.canvas.fill(ink, (x - width // 2, y + row + (0 if active else 2),
+                                   width, 1))
 
 
 def main() -> None:

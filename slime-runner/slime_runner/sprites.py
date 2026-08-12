@@ -135,37 +135,80 @@ SLIME_FRAMES = {
 
 # Three-pixel trunks. A one-pixel trunk is technically a cactus and reads on
 # screen as a twig; at this resolution the silhouette needs the weight.
+#
+# The 'o' pixels are a dark edge along the top and one side, and they are not
+# decoration. An obstacle's fill ramps from dark by day to light by night while
+# the sky behind it ramps the other way, so the two must cross, and at the
+# crossing the fill alone is invisible -- 46 of 255 at dusk, less in snow. The
+# edge tone never flips, so it carries those steps exactly as a character's
+# outline carries the ones where its body washes out.
 CACTUS_SMALL = (
+    "..ooo..",
+    "..o##..",
+    "..o##..",
+    "#.o##..",
+    "#.o##.#",
+    "##o##.#",
+    "..o####",
+    "..o##..",
+    "..o##..",
+    "..o##..",
+    "..o##..",
+)
+
+CACTUS_LARGE = (
+    "...ooo...",
+    "...o##...",
+    "...o##...",
+    "...o##...",
+    "#..o##...",
+    "#..o##..#",
+    "#..o##..#",
+    "###o##..#",
+    "...o#####",
+    "...o##...",
+    "...o##...",
+    "...o##...",
+    "...o##...",
+    "...o##...",
+    "...o##...",
+    "...o##...",
+)
+
+# Snow's ground pair. Same footprints as the cacti (7x11 and 9x16) with the same
+# solid core, so they drop into the same hitboxes and the scene cannot change how
+# hard the game is — the rule that holds for characters holds for scenery too.
+SNOWMAN = (
+    "..ooo..",
+    ".o###o.",
+    ".o###o.",
     "..###..",
-    "..###..",
-    "..###..",
-    "#.###..",
-    "#.###.#",
-    "#####.#",
-    "..#####",
-    "..###..",
-    "..###..",
+    ".o###o.",
+    "o#####o",
+    "o#####o",
+    "o#####o",
+    ".o###o.",
     "..###..",
     "..###..",
 )
 
-CACTUS_LARGE = (
-    "...###...",
-    "...###...",
-    "...###...",
-    "...###...",
-    "#..###...",
-    "#..###..#",
-    "#..###..#",
-    "######..#",
-    "...######",
-    "...###...",
-    "...###...",
-    "...###...",
-    "...###...",
-    "...###...",
-    "...###...",
-    "...###...",
+PINE = (
+    "....o....",
+    "...o#o...",
+    "..o###o..",
+    "..o###o..",
+    ".o#####o.",
+    "..o###o..",
+    ".o#####o.",
+    "o#######o",
+    ".o#####o.",
+    "o#######o",
+    "...ooo...",
+    "...o#o...",
+    "...o#o...",
+    "...o#o...",
+    "...o#o...",
+    "...ooo...",
 )
 
 FLYER_UP = (
@@ -174,15 +217,15 @@ FLYER_UP = (
     "..###...###..",
     "...#######...",
     "..o#######...",
-    "...#######...",
-    "....#####....",
+    "...ooooooo...",
+    "....ooooo....",
 )
 
 FLYER_DOWN = (
     "....#####....",
     "...#######...",
     "..o#######...",
-    "...#######...",
+    "...ooooooo...",
     "..###...###..",
     ".###.....###.",
     "###.......###",
@@ -386,15 +429,18 @@ class CharacterSheet:
 
 
 class WorldSheet:
-    """Everything the world draws, at one day/night step.
+    """Everything a scene draws, at one day/night step.
 
     Split from the character deliberately. These sprites do not depend on who is
     playing, and while they shared a sheet every one of them was rebuilt and held
-    once per character. It is also the seam a second scene would need: swapping
-    the world's art and palette leaves the characters untouched.
+    once per character.
+
+    The obstacle art arrives as a parameter rather than being baked in: that is
+    what lets two scenes share the flyer and differ on the ground, or share every
+    shape and differ only in colour.
     """
 
-    def __init__(self, palette: Palette):
+    def __init__(self, palette: Palette, ground_art, flyer_art):
         obstacle = {
             "#": palette.obstacle,
             "o": palette.obstacle_dark,
@@ -403,28 +449,15 @@ class WorldSheet:
         }
         cloud = dict.fromkeys("#o*@", palette.cloud)
         dust = dict.fromkeys("#o*@", palette.dust)
-        moon = dict.fromkeys("#o*@", (246, 244, 222))
+        moon = dict.fromkeys("#o*@", palette.moon)
 
         # Keyed by Obstacle.kind, so a new ground hazard is an entry here and a
         # spawn rule, not another branch in the draw code.
-        self.ground = {
-            "small": build(CACTUS_SMALL, obstacle),
-            "large": build(CACTUS_LARGE, obstacle),
-        }
-        self.flyer = (build(FLYER_UP, obstacle), build(FLYER_DOWN, obstacle))
+        self.ground = {kind: build(rows, obstacle) for kind, rows in ground_art.items()}
+        self.flyer = tuple(build(rows, obstacle) for rows in flyer_art)
         self.clouds = (build(CLOUD_BIG, cloud), build(CLOUD_SMALL, cloud))
         self.moon = build(MOON, moon)
         self.puff = tuple(build(rows, dust) for rows in PUFF)
-
-
-_world_sheets: dict[int, WorldSheet] = {}
-
-
-def world_sheet(step: int, palette: Palette) -> WorldSheet:
-    """The cached world sheet for a day/night step, built once."""
-    if step not in _world_sheets:
-        _world_sheets[step] = WorldSheet(palette)
-    return _world_sheets[step]
 
 
 # Frame sizes are needed for hitboxes and placement before any sheet is built,
@@ -436,6 +469,8 @@ ALL_ART = {
     **{f"slime.{n}": r for n, r in SLIME_FRAMES.items()},
     "cactus_small": CACTUS_SMALL,
     "cactus_large": CACTUS_LARGE,
+    "snowman": SNOWMAN,
+    "pine": PINE,
     "flyer_up": FLYER_UP,
     "flyer_down": FLYER_DOWN,
     "cloud_big": CLOUD_BIG,

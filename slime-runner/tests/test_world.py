@@ -2,8 +2,10 @@
 
 import random
 
+import pytest
+
 from slime_runner import slime as sl
-from slime_runner import sprites
+from slime_runner import scenes, sprites
 from slime_runner import world as wd
 
 DT = 1.0 / 60.0
@@ -45,7 +47,7 @@ def test_gap_constant_is_not_optimistic():
 
 
 def test_spawn_gaps_always_leave_room_to_land_and_jump_again():
-    w = RecordingWorld(random.Random(1))
+    w = RecordingWorld(scenes.DEFAULT, random.Random(1))
     for _ in range(FIVE_MINUTES):
         w.update(DT)
     assert len(w.spawns) > 100
@@ -153,7 +155,7 @@ def test_top_speed_still_leaves_time_to_react():
 
 
 def test_no_flyers_before_they_unlock():
-    w = RecordingWorld(random.Random(2))
+    w = RecordingWorld(scenes.DEFAULT, random.Random(2))
     floor = speed_at(wd.AIR_FROM)
     while w.speed < floor:
         w.update(DT)
@@ -162,7 +164,7 @@ def test_no_flyers_before_they_unlock():
 
 def test_the_opening_of_a_real_run_spawns_only_small_cacti():
     """The weights are one thing; what actually reaches the screen is another."""
-    w = wd.World(random.Random(11))
+    w = wd.World(scenes.DEFAULT, random.Random(11))
     unlock_speed = speed_at(min(wd.LARGE_FROM, wd.AIR_FROM))
     while w.speed < unlock_speed:
         w.update(DT)
@@ -177,7 +179,7 @@ def test_stars_hold_still_while_the_clouds_drift():
     Anything that moves reads as near scenery; the stars and the moon are the
     only things meant to sit further off than the hills.
     """
-    w = wd.World(random.Random(5))
+    w = wd.World(scenes.DEFAULT, random.Random(5))
     stars, clouds = list(w.stars), [c[0] for c in w.clouds]
     for _ in range(FIVE_MINUTES):
         w.update(DT)
@@ -187,7 +189,7 @@ def test_stars_hold_still_while_the_clouds_drift():
 
 
 def test_obstacles_are_retired_once_offscreen():
-    w = wd.World(random.Random(3))
+    w = wd.World(scenes.DEFAULT, random.Random(3))
     for _ in range(FIVE_MINUTES):
         w.update(DT)
         assert all(ob.x + ob.w > -16.0 for ob in w.obstacles)
@@ -195,9 +197,80 @@ def test_obstacles_are_retired_once_offscreen():
 
 
 def test_speed_and_day_phase_stay_in_range():
-    w = wd.World(random.Random(4))
+    w = wd.World(scenes.DEFAULT, random.Random(4))
     for _ in range(FIVE_MINUTES):
         w.update(DT)
         assert wd.SPEED_START <= w.speed <= wd.SPEED_MAX
         assert 0.0 <= w.phase < 1.0
     assert w.speed == wd.SPEED_MAX
+
+
+# -- scenes -----------------------------------------------------------------
+
+
+def test_every_scene_supplies_art_for_every_role_the_spawner_uses():
+    """A scene missing a role would crash on its first spawn of that kind."""
+    for scene in scenes.SCENES:
+        assert set(scene.ground) == {"small", "large"}, scene.key
+        assert len(scene.flyer) == 2, scene.key
+
+
+def test_scene_art_fits_the_same_hitboxes():
+    """Picking a place must not pick a difficulty.
+
+    Every scene's art has to cover the one set of hitboxes the spawner uses, or
+    swapping scenery would quietly change how hard the game is -- the same rule
+    that holds for characters.
+    """
+    for scene in scenes.SCENES:
+        for kind, box in (("small", wd.SMALL_BOX), ("large", wd.LARGE_BOX)):
+            sw, sh = sprites.sprite_size(scene.ground[kind])
+            assert box[0] <= sw and box[1] <= sh, (scene.key, kind)
+        for rows in scene.flyer:
+            sw, sh = sprites.sprite_size(rows)
+            assert wd.AIR_BOX[0] <= sw and wd.AIR_BOX[1] <= sh, scene.key
+
+
+def test_scene_ground_art_has_a_solid_core_over_its_hitbox():
+    """The box is narrower than the art, but it must not cover empty pixels.
+
+    A hitbox column with no art behind it is a death the player could not have
+    read off the screen.
+    """
+    for scene in scenes.SCENES:
+        for kind, box in (("small", wd.SMALL_BOX), ("large", wd.LARGE_BOX)):
+            rows = scene.ground[kind]
+            sw, _ = sprites.sprite_size(rows)
+            core = 3  # the trunk every ground obstacle is built around
+            left = (sw - core) // 2
+            for y, row in enumerate(rows):
+                span = row[left:left + core]
+                assert set(span) != {"."}, (scene.key, kind, y, row)
+
+
+def test_a_scene_can_switch_a_layer_off():
+    """The parameterisation is only real if absence works, not just recolouring."""
+    assert not scenes.SNOW.has("clouds")
+    w = wd.World(scenes.SNOW, random.Random(9))
+    assert w.clouds == []
+    for _ in range(600):
+        w.update(DT)
+    assert w.clouds == []
+    # And the layers it does keep are still populated.
+    assert w.stars and w.near and w.speckles
+
+
+def test_unknown_layer_names_are_rejected():
+    """A typo would silently switch a layer off rather than fail."""
+    import dataclasses
+    with pytest.raises(ValueError):
+        dataclasses.replace(scenes.DESERT, layers=frozenset({"hils_far"}))
+
+
+def test_switching_scene_rebuilds_the_scenery():
+    w = wd.World(scenes.DESERT, random.Random(7))
+    assert w.clouds
+    w.use_scene(scenes.SNOW)
+    assert w.clouds == []
+    w.use_scene(scenes.DESERT)
+    assert w.clouds

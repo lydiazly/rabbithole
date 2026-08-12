@@ -2,12 +2,13 @@
 
 import pytest
 
-from slime_runner import characters, main, pixelfont, sprites
+from slime_runner import characters, main, pixelfont, scenes, sprites
 from slime_runner import slime as sl
 from slime_runner import world as wd
-from slime_runner.palette import (
-    DAY, NIGHT, STEPS, is_night, luminance, palette_for_step, step_at, text_tones,
-)
+from slime_runner.palette import STEPS, is_night, luminance, step_at
+
+SCENE_STEPS = [(s, st) for s in scenes.SCENES for st in range(STEPS)]
+SCENE_IDS = [f"{s.key}-{st}" for s, st in SCENE_STEPS]
 
 DT = 1.0 / 60.0
 GROUND = 84.0
@@ -46,11 +47,11 @@ def test_every_sheet_builds_for_every_character_and_step(character, step):
     assert len(sheet.accessory) == expected
 
 
-@pytest.mark.parametrize("step", range(STEPS))
-def test_the_world_sheet_builds_for_every_step(step):
-    sheet = sprites.world_sheet(step, palette_for_step(step))
-    assert set(sheet.ground) == {"small", "large"}
-    assert len(sheet.flyer) == 2
+@pytest.mark.parametrize("scene,step", SCENE_STEPS, ids=SCENE_IDS)
+def test_the_world_sheet_builds_for_every_scene_and_step(scene, step):
+    sheet = scenes.sheet_for(scene, step)
+    assert set(sheet.ground) == set(scene.ground)
+    assert len(sheet.flyer) == len(scene.flyer)
 
 
 def test_squash_frames_are_wider_and_shorter_than_the_round_one():
@@ -235,13 +236,13 @@ def test_the_select_screen_lays_out_any_number_of_characters(count):
 
 
 def test_world_art_is_shared_between_characters_not_copied_per_character():
-    """The world sheet is keyed on the day/night step alone.
+    """World art is keyed on the scene and step, never on the character.
 
     While it was bundled into the character's sheet, every cactus, cloud, moon
     and puff was rebuilt and held once per character.
     """
-    palette = palette_for_step(0)
-    assert sprites.world_sheet(0, palette) is sprites.world_sheet(0, palette)
+    assert scenes.sheet_for(scenes.DESERT, 0) is scenes.sheet_for(scenes.DESERT, 0)
+    assert scenes.sheet_for(scenes.SNOW, 0) is not scenes.sheet_for(scenes.DESERT, 0)
     slime_sheet = characters.sheet_for(characters.SLIME, 0)
     assert characters.sheet_for(characters.SLIME, 0) is slime_sheet
     assert characters.sheet_for(characters.CAT, 0) is not slime_sheet
@@ -437,60 +438,81 @@ def test_lateral_movement_is_clamped():
 def test_palette_steps_hold_at_the_ends():
     assert step_at(0.0) == 0
     assert step_at(0.7) == STEPS - 1
-    assert palette_for_step(0) is DAY
-    assert palette_for_step(STEPS - 1) is NIGHT
     assert not is_night(0)
     assert is_night(STEPS - 1)
+    for scene in scenes.SCENES:
+        assert scenes.palette_for_step(scene, 0) is scene.day
+        assert scenes.palette_for_step(scene, STEPS - 1) is scene.night
 
 
-def test_ground_detail_keeps_its_contrast_direction_at_every_step():
+@pytest.mark.parametrize("scene,step", SCENE_STEPS, ids=SCENE_IDS)
+def test_ground_detail_keeps_its_contrast_direction(scene, step):
     """Day and night both put the speckles darker than the ground.
 
     If one palette flipped the direction, the two would cross somewhere mid-dusk
     and the ground would go flat and detail-less for the whole transition.
     """
-    for step in range(STEPS):
-        p = palette_for_step(step)
-        assert sum(p.speckle) < sum(p.ground), step
-        assert sum(p.ground_line) < sum(p.ground), step
+    p = scenes.palette_for_step(scene, step)
+    assert sum(p.speckle) < sum(p.ground), (scene.key, step)
+    assert sum(p.ground_line) < sum(p.ground), (scene.key, step)
 
 
-def test_obstacles_stay_distinguishable_from_the_ground_at_every_step():
-    for step in range(STEPS):
-        p = palette_for_step(step)
-        diff = sum(abs(a - b) for a, b in zip(p.obstacle, p.ground))
-        assert diff > 40, (step, p.obstacle, p.ground)
+@pytest.mark.parametrize("scene,step", SCENE_STEPS, ids=SCENE_IDS)
+def test_obstacles_stay_visible_against_everything_behind_them(scene, step):
+    """Measured against the sky, horizon and hills -- not against the ground.
+
+    Obstacles stand *on* the ground line and extend upward, so they never
+    overlap the ground band at all. Checking them against the ground was
+    checking a pair that never touches, and it hid a real fault: the fill ramps
+    light towards night while every background ramps dark, so the two cross, and
+    at the crossing the fill alone measured 46 of 255 in the desert and 17 in
+    snow. The dark edge tone is what has to carry those steps.
+    """
+    p = scenes.palette_for_step(scene, step)
+    for name in ("sky", "horizon", "hill_far", "hill_near"):
+        if name in ("hill_far", "hill_near") and not scene.has(name):
+            continue
+        if name == "horizon" and not scene.has("horizon"):
+            continue
+        behind = getattr(p, name)
+        best = max(
+            sum(abs(a - b) for a, b in zip(p.obstacle, behind)),
+            sum(abs(a - b) for a, b in zip(p.obstacle_dark, behind)),
+        )
+        assert best > 90, (scene.key, step, name, best)
 
 
-def test_text_stays_readable_against_the_sky_at_every_step():
+@pytest.mark.parametrize("scene,step", SCENE_STEPS, ids=SCENE_IDS)
+def test_text_stays_readable_against_the_sky(scene, step):
     """The dusk steps are where this failed: contrast bottomed out at 18 of 255.
 
     Choosing the tone by whether it was night, rather than by how bright the sky
     actually was, left dark text on an already-dark sky for three whole steps.
+    A pale scene like snow is the other way a fixed choice would break.
     """
-    for step in range(STEPS):
-        sky = palette_for_step(step).sky
-        ink, halo = text_tones(step)
-        assert abs(luminance(ink) - luminance(sky)) > 60, (step, ink, sky)
-        # The shadow exists to separate glyphs from whatever they overlap -- hills,
-        # clouds, a cactus -- so it just has to be the opposite tone to the ink.
-        assert {ink, halo} == {DAY.text, NIGHT.text}, step
+    sky = scenes.palette_for_step(scene, step).sky
+    ink, halo = scenes.text_tones(scene, step)
+    assert abs(luminance(ink) - luminance(sky)) > 60, (scene.key, step, ink, sky)
+    # The shadow exists to separate glyphs from whatever they overlap -- hills,
+    # clouds, an obstacle -- so it just has to be the opposite tone to the ink.
+    assert {ink, halo} == {scene.day.text, scene.night.text}, (scene.key, step)
 
 
-def test_characters_stay_visible_against_the_sky_at_every_step():
+@pytest.mark.parametrize("scene,step", SCENE_STEPS, ids=SCENE_IDS)
+def test_characters_stay_visible_against_every_sky(scene, step):
     """Either the fill or the edge has to separate the character from the sky.
 
     Which one does the work changes over the ramp, and neither survives it alone:
     the slime's dark outline carries the bright daytime steps and washes out by
-    dusk, exactly as its body brightens enough to take over. Measuring only one of
-    them reports a failure at whichever end the other is covering.
+    dusk, exactly as its body brightens enough to take over. Every character has
+    to clear this against every scene, which is the cross-product a new scene
+    could quietly break.
     """
+    sky = scenes.palette_for_step(scene, step).sky
     for character in characters.CHARACTERS:
-        for step in range(STEPS):
-            sky = palette_for_step(step).sky
-            look = characters.look_for_step(character, step)
-            best = max(
-                sum(abs(a - b) for a, b in zip(look.body, sky)),
-                sum(abs(a - b) for a, b in zip(look.outline, sky)),
-            )
-            assert best > 140, (character.key, step, best)
+        look = characters.look_for_step(character, step)
+        best = max(
+            sum(abs(a - b) for a, b in zip(look.body, sky)),
+            sum(abs(a - b) for a, b in zip(look.outline, sky)),
+        )
+        assert best > 140, (scene.key, character.key, step, best)

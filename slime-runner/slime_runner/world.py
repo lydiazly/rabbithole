@@ -16,7 +16,7 @@ import pygame
 
 from . import slime as slime_mod
 from . import sprites
-from .palette import STAR, is_night
+from .palette import is_night
 
 WIDTH = 300
 HEIGHT = 108
@@ -134,8 +134,14 @@ def min_gap(speed: float) -> float:
 
 
 class World:
-    def __init__(self, rng: random.Random | None = None):
+    def __init__(self, scene, rng: random.Random | None = None):
         self.rng = rng or random.Random()
+        self.scene = scene
+        self.reset()
+
+    def use_scene(self, scene) -> None:
+        """Switch scene and start fresh. Layers differ, so scenery is rebuilt."""
+        self.scene = scene
         self.reset()
 
     def reset(self) -> None:
@@ -154,19 +160,34 @@ class World:
     # -- scenery ----------------------------------------------------------
 
     def _build_scenery(self) -> None:
+        """Populate the layers this scene uses, and only those.
+
+        A layer the scene has switched off generates nothing, so it also scrolls
+        nothing and draws nothing -- one membership test rather than three.
+        """
         r = self.rng
+        has = self.scene.has
         self.clouds = [
             [r.uniform(0, WIDTH * 1.4), r.randrange(6, 40), r.randrange(2)]
-            for _ in range(5)
+            for _ in range(5 if has("clouds") else 0)
         ]
         # Fixed, so whole pixels and no wrap-around bookkeeping.
-        self.stars = [(r.randrange(WIDTH), r.randrange(3, 46)) for _ in range(16)]
-        self.far = [[r.uniform(0, WIDTH * 1.3), r.randrange(22, 40)] for _ in range(6)]
-        self.near = [[r.uniform(0, WIDTH * 1.3), r.randrange(22, 34)] for _ in range(7)]
+        self.stars = [
+            (r.randrange(WIDTH), r.randrange(3, 46))
+            for _ in range(16 if has("stars") else 0)
+        ]
+        self.far = [
+            [r.uniform(0, WIDTH * 1.3), r.randrange(22, 40)]
+            for _ in range(6 if has("hills_far") else 0)
+        ]
+        self.near = [
+            [r.uniform(0, WIDTH * 1.3), r.randrange(22, 34)]
+            for _ in range(7 if has("hills_near") else 0)
+        ]
         self.speckles = [
             [r.uniform(0, WIDTH), r.randrange(GROUND_Y + 4, HEIGHT - 2),
              r.randrange(2, 5)]
-            for _ in range(26)
+            for _ in range(26 if has("speckles") else 0)
         ]
 
     def _scroll_layer(self, items, factor: float, dt: float, span: float) -> None:
@@ -238,15 +259,25 @@ class World:
     # -- drawing ----------------------------------------------------------
 
     def draw(self, canvas, palette, step: int, sheet: sprites.WorldSheet) -> None:
+        """Back to front. The order is fixed here: a scene chooses what is drawn,
+        never what covers what.
+
+        Layers the scene switched off generated no items, so their loops are
+        empty and need no test of their own. The two that are single draws rather
+        than loops are gated explicitly.
+        """
         canvas.fill(palette.sky)
-        pygame.draw.rect(
-            canvas, palette.horizon, (0, GROUND_Y - HORIZON_BAND, WIDTH, HORIZON_BAND)
-        )
+        if self.scene.has("horizon"):
+            pygame.draw.rect(
+                canvas, palette.horizon,
+                (0, GROUND_Y - HORIZON_BAND, WIDTH, HORIZON_BAND),
+            )
 
         if is_night(step):
-            canvas.blit(sheet.moon, MOON_POS)
+            if self.scene.has("moon"):
+                canvas.blit(sheet.moon, MOON_POS)
             for star in self.stars:
-                canvas.set_at(star, STAR)
+                canvas.set_at(star, palette.star)
 
         for x, y, which in self.clouds:
             canvas.blit(sheet.clouds[which], (int(x), y))
