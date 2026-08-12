@@ -58,7 +58,13 @@ JUMP_BUFFER = 0.12  # a press just before landing still counts
 # would chain: a dash smashes enough to pay for the next one. The cooldown is
 # what stops that, measured from the end of the last dash, so two dashes are
 # always a real stretch of ordinary running apart.
-DASH_EVERY = 20  # points
+DASH_EVERY = 20  # points for the first one
+# And more for each one after it. The cooldown alone kept dashes from chaining
+# but not from staying cheap: once the speed is up, twenty points come round
+# quickly, and a reward that arrives on a fixed tariff stops being a reward.
+# Additive rather than multiplied so the bar's pace degrades gently and the
+# fourth dash is still reachable -- 20, 35, 50, 65 rather than 20, 30, 45, 68.
+DASH_EVERY_STEP = 15
 DASH_COOLDOWN = 12.0
 DASH_SECONDS = 5.0
 DASH_BOOST = 1.6
@@ -105,20 +111,31 @@ DASH_WARN_GAP_SCALE = 1.8
 # appears at the right edge, and then the width of the canvas again before it
 # arrives, which is the breather the boost was borrowing against.
 DASH_RECOVERY = 3.0
-DASH_OVER_PROMPT = "GET READY"
-# Popped rather than blinked. A blink is only visible if you happen to be looking
-# when it starts; something that grows is still obviously mid-growth a moment
-# later, which is the whole problem with signalling the end of a dash. It grows
-# and then goes, leaving the rest of the breather quiet -- the empty screen says
-# the same thing, and words that outstayed the moment would just be furniture.
-DASH_OVER_POP = ((1, 0.07), (2, 0.07), (3, 0.90))  # scale, seconds held
 
-# Telling the player what a dash is for. Two words, blinked over the sky for the
-# first stretch of it, then out of the way -- long enough to be read on the first
-# dash of a first run, short enough not to sit on top of the game after that.
+# The warning starts before the dash does, not at the moment it ends: by then
+# the player has no time left to do anything with it. "GET READY" rides the last
+# stretch of the dash, and the countdown then runs through the breather, so the
+# whole handover is one continuous piece of information rather than an event to
+# be caught. Three seconds of breather, three numbers, one each.
+DASH_OVER_PROMPT = "GET READY"
+DASH_COUNTDOWN_FROM = 3
+
+# Everything above pulses rather than blinking or growing once. A blink is only
+# visible if you happened to be looking when it started; a single grow is over
+# before a glance lands. A pulse is always mid-pulse, so it reads as urgent
+# whenever you look at it. Sizes are whole font scales, so the pulse is a swell
+# to the big one and a settle back to the small -- integer steps are all this
+# font has, and a two-step beat is enough to read as breathing.
+PULSE_BEAT = 0.5      # seconds per swell
+PULSE_SWELL = 0.35    # fraction of the beat spent at the larger size
+PROMPT_SCALES = (2, 3)     # words: settle, swell
+COUNT_SCALES = (4, 5)      # a single digit can afford to be enormous
+
+# Telling the player what a dash is for. Two words over the sky for the first
+# stretch of it, then out of the way -- long enough to be read on the first dash
+# of a first run, short enough not to sit on top of the game after that.
 DASH_PROMPT = "SMASH THROUGH"
-DASH_PROMPT_SECONDS = 1.6
-DASH_PROMPT_BLINK = 14  # frames lit, frames dark: about two blinks a second
+DASH_PROMPT_SECONDS = 2.5
 
 # Smashing something should feel like it cost the obstacle rather than the
 # player. Three things at once, none of them expensive:
@@ -154,13 +171,10 @@ PLAYING = "playing"
 GAME_OVER = "over"
 
 
-def pop_scale(elapsed: float) -> int:
-    """The prompt's size this far into the pop, or 0 once it is over."""
-    for scale, seconds in DASH_OVER_POP:
-        if elapsed < seconds:
-            return scale
-        elapsed -= seconds
-    return 0
+def pulse_scale(elapsed: float, scales=PROMPT_SCALES) -> int:
+    """Swell to the larger size at the top of each beat, settle back after."""
+    small, big = scales
+    return big if (elapsed % PULSE_BEAT) < PULSE_BEAT * PULSE_SWELL else small
 
 
 class Game:
@@ -195,6 +209,7 @@ class Game:
         self.recovery = 0.0
         self.freeze = 0
         self.shake = 0
+        self.dashes_taken = 0
         self.state = MENU
 
     # -- state transitions ------------------------------------------------
@@ -230,6 +245,7 @@ class Game:
         self.recovery = 0.0
         self.freeze = 0
         self.shake = 0
+        self.dashes_taken = 0
 
     def start_run(self) -> None:
         self.go_to_title()
@@ -254,7 +270,13 @@ class Game:
         dash is still being held open for a clear exit."""
         return self.dash_on
 
+    @property
+    def dash_target(self) -> int:
+        """Points needed for the next dash. Grows with each one taken."""
+        return DASH_EVERY + DASH_EVERY_STEP * self.dashes_taken
+
     def start_dash(self) -> None:
+        self.dashes_taken += 1
         self.dash_left = DASH_SECONDS
         self.dash_on = True
         self.dash_cooldown = DASH_COOLDOWN
@@ -281,12 +303,18 @@ class Game:
         sfx.play("power_down")
 
     def exit_is_clear(self) -> bool:
-        """Whether there is room ahead to react once the boost drops."""
+        """Whether there is room ahead to react once the boost drops.
+
+        "Ahead" means anything not yet fully behind the player, not just
+        anything past their nose. The difference is one frame wide and it was a
+        death: an obstacle reaching the player stopped counting as ahead at the
+        same tick it started counting as a collision.
+        """
         left, _, width, _ = self.player.hitbox()
         front = left + width
         reach = DASH_EXIT_CLEARANCE * self.world.speed
         return not any(
-            not ob.launched and front < ob.x < front + reach
+            not ob.launched and ob.x + ob.w > left and ob.x < front + reach
             for ob in self.world.obstacles
         )
 
@@ -427,6 +455,33 @@ class Game:
             self.puffs.burst(self.player.x, world.GROUND_Y, impact >= HARD_LANDING)
         self.puffs.update(dt, self.world.scroll)
 
+        # Contact is resolved before the dash is allowed to expire, and the order
+        # is the whole point. An obstacle stops blocking the exit at the exact
+        # instant it starts touching the player -- the exit check looks ahead, and
+        # something touching you is no longer ahead of you -- so ending the dash
+        # first handed the collision to a player who had been invincible one line
+        # earlier. Reproducible at every sub-frame offset of the crossing tick,
+        # and worst on the last obstacle of a dash, which is the one the exit
+        # hold was waiting on.
+        struck = self.world.hits(self.player.hitbox())
+        if struck:
+            if not self.dashing:
+                self.end_run()
+                return
+            for ob in struck:
+                if not ob.scored:
+                    self.award(world.points_for(ob))
+                self.world.launch(ob)
+                # At the obstacle, not on the ground under it. A smashed flyer
+                # used to puff at floor level, a body-length below where it was
+                # hit.
+                self.puffs.burst(ob.x + ob.w / 2, ob.y + ob.h, True)
+            # One of each per frame, however many were struck: a cluster is one
+            # impact to the player, and stacked hit-stop would read as a hang.
+            self.freeze = SMASH_FREEZE
+            self.shake = len(SMASH_SHAKE)
+            sfx.play("smash")
+
         if self.dashing:
             self.dash_left = max(0.0, self.dash_left - dt)
             self.world.gap_scale = DASH_WARN_GAP_SCALE if self.dash_ending else 1.0
@@ -435,27 +490,8 @@ class Game:
         else:
             self.recovery = max(0.0, self.recovery - dt)
             self.dash_cooldown = max(0.0, self.dash_cooldown - dt)
-            if self.toward_dash >= DASH_EVERY and self.dash_cooldown <= 0.0:
+            if self.toward_dash >= self.dash_target and self.dash_cooldown <= 0.0:
                 self.start_dash()
-
-        struck = self.world.hits(self.player.hitbox())
-        if not struck:
-            return
-        if not self.dashing:
-            self.end_run()
-            return
-        for ob in struck:
-            if not ob.scored:
-                self.award(world.points_for(ob))
-            self.world.launch(ob)
-            # At the obstacle, not on the ground under it. A smashed flyer used
-            # to puff at floor level, a body-length below where it was hit.
-            self.puffs.burst(ob.x + ob.w / 2, ob.y + ob.h, True)
-        # One of each per frame, however many were struck: a cluster is one
-        # impact to the player, and stacked hit-stop would read as a hang.
-        self.freeze = SMASH_FREEZE
-        self.shake = len(SMASH_SHAKE)
-        sfx.play("smash")
 
     def award(self, cleared: int) -> None:
         self.score += cleared
@@ -534,6 +570,19 @@ class Game:
                 self.canvas.blit(facings[flipped], (left + dx, top + dy))
         self.canvas.blit(sheet.poses[frame], pos)
 
+    PULSE_MIDDLE = 41  # the row a pulsing prompt is centred on
+
+    def pulsed(self, line: str, elapsed: float, scales, ink, halo) -> None:
+        """A prompt that swells in place on the beat.
+
+        Centred by hand because text is drawn from its top left, so a line that
+        changed size would otherwise sink down the screen as it grew instead of
+        breathing around one point.
+        """
+        scale = pulse_scale(elapsed, scales)
+        self.text(line, self.PULSE_MIDDLE - pixelfont.GLYPH_H * scale // 2,
+                  ink, halo, scale)
+
     def text(self, line: str, y: int, ink, halo, scale: int = 1, x=None) -> None:
         """Centred by default, with a one-pixel shadow so it survives any sky."""
         if x is None:
@@ -551,11 +600,14 @@ class Game:
     # right-hand side is where there is room for them.
     HUD_MARGIN = 6
 
-    def draw_hud(self, ink, halo) -> None:
-        score = f"{self.score:04d}"
+    def score_line(self) -> str:
+        """The top-left text. Also sets how wide the meter under it is drawn."""
         if self.highscore:
-            score = f"HI {self.highscore:04d}  {score}"
-        self.text(score, 6, ink, halo, x=self.HUD_MARGIN)
+            return f"HI {self.highscore:04d}  {self.score:04d}"
+        return f"{self.score:04d}"
+
+    def draw_hud(self, ink, halo) -> None:
+        self.text(self.score_line(), 6, ink, halo, x=self.HUD_MARGIN)
 
         if self.state == PLAYING:
             keys = "P PAUSE  R RETRY  M MENU"
@@ -566,26 +618,27 @@ class Game:
                 self.text("PAUSED", 34, ink, halo, 2)
                 self.text("P  RESUME", 52, ink, halo)
             elif self.dashing:
-                # Blinked off the dash's own elapsed time, not the global tick:
-                # phased against the tick the prompt starts wherever it happens
-                # to land, and can open on its dark half.
+                # Timed off the dash's own clock, not the global tick: phased
+                # against the tick, a prompt starts wherever it happens to land.
                 elapsed = DASH_SECONDS - self.dash_left
-                lit = int(elapsed * 60) // DASH_PROMPT_BLINK % 2 == 0
-                if elapsed < DASH_PROMPT_SECONDS and lit:
-                    self.text(DASH_PROMPT, 34, ink, halo)
+                if self.dash_ending:
+                    # The handover begins while the dash is still up, so the
+                    # warning arrives with time left to act on it.
+                    self.pulsed(DASH_OVER_PROMPT,
+                                DASH_WARN_SECONDS - self.dash_left, PROMPT_SCALES,
+                                ink, halo)
+                elif elapsed < DASH_PROMPT_SECONDS:
+                    self.pulsed(DASH_PROMPT, elapsed, PROMPT_SCALES, ink, halo)
             elif self.recovery > 0.0:
-                # Said in words on an empty screen, because everything else
-                # about the ending was a change in something -- the strobe
-                # stopping, the meter going, the speed dropping -- and a player
-                # who was not watching for a change does not see one.
-                scale = pop_scale(DASH_RECOVERY - self.recovery)
-                if scale:
-                    # Kept centred as it grows: the text is drawn from its top
-                    # left, so a taller line would otherwise sink down the
-                    # screen instead of swelling in place.
-                    height = pixelfont.GLYPH_H * scale
-                    self.text(DASH_OVER_PROMPT, 34 + (15 - height) // 2,
-                              ink, halo, scale)
+                # Then the countdown, straight on from the warning, over an
+                # empty screen. Everything else about the ending was a change in
+                # something -- the strobe stopping, the meter going, the speed
+                # dropping -- and a player who was not watching for a change does
+                # not see one. A number counting down is a state, not a change.
+                left = min(DASH_COUNTDOWN_FROM,
+                           int(self.recovery / DASH_RECOVERY * DASH_COUNTDOWN_FROM) + 1)
+                self.pulsed(str(left), DASH_RECOVERY - self.recovery,
+                            COUNT_SCALES, ink, halo)
         elif self.state == TITLE:
             self.text(self.character.name, 20, ink, halo, 2)
             self.text("SPACE OR W - JUMP", 38, ink, halo)
@@ -606,9 +659,9 @@ class Game:
     MENU_TOP = 40
     MENU_PITCH = 11
 
-    DASH_METER_W = 48
+    DASH_METER_MIN = 48
     DASH_METER_Y = 16
-    DASH_STAR_BLINK = 8
+    DASH_ICON_BLINK = 8
 
     def draw_streaks(self, ink) -> None:
         """Speed lines across the sky while dashing."""
@@ -626,7 +679,7 @@ class Game:
         if self.dashing:
             filled = self.dash_left / DASH_SECONDS
         else:
-            owed = min(1.0, self.toward_dash / DASH_EVERY)
+            owed = min(1.0, self.toward_dash / self.dash_target)
             waited = 1.0 if DASH_COOLDOWN <= 0 else min(
                 1.0, 1.0 - self.dash_cooldown / DASH_COOLDOWN
             )
@@ -638,19 +691,23 @@ class Game:
         # player is already looking at.
         x = self.HUD_MARGIN
         y = self.DASH_METER_Y
-        # A star, because an unlabelled bar in the corner of a first run is just
-        # a bar. Mario's is the one everybody has already learned, and the code
-        # was calling this a starman anyway. It flashes once the bar is full and
-        # stays lit for the dash, so one cycle teaches what the bar is counting
-        # towards without a word of tutorial.
+        # A bolt, because an unlabelled bar in the corner of a first run is just
+        # a bar. It flashes once the bar is full and stays lit through the dash,
+        # so one cycle teaches what the bar counts towards with no tutorial.
         ready = self.dashing or filled >= 1.0
-        if not ready or (self.tick // self.DASH_STAR_BLINK) % 2 == 0:
+        if not ready or (self.tick // self.DASH_ICON_BLINK) % 2 == 0:
             pixelfont.draw(self.canvas, "*", x + 1, y - 1, halo)
             pixelfont.draw(self.canvas, "*", x, y - 2, ink)
         x += pixelfont.GLYPH_W + 3
-        self.canvas.fill(halo, (x, y + 1, self.DASH_METER_W, 2))
-        self.canvas.fill(ink, (x, y, self.DASH_METER_W, 1))
-        width = round(self.DASH_METER_W * max(0.0, min(1.0, filled)))
+        # The bar runs to the far end of the score above it, so the two line up
+        # at both margins and read as one block rather than two left-aligned
+        # things of unrelated length. The floor is for a first-ever run, where
+        # there is no high score yet and the line is only four digits wide.
+        span = max(self.DASH_METER_MIN,
+                   self.HUD_MARGIN + pixelfont.text_width(self.score_line()) - x)
+        self.canvas.fill(halo, (x, y + 1, span, 2))
+        self.canvas.fill(ink, (x, y, span, 1))
+        width = round(span * max(0.0, min(1.0, filled)))
         if width:
             self.canvas.fill(ink, (x, y, width, 2))
 

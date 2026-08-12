@@ -61,14 +61,16 @@ _GLYPHS = {
     "!": ("..#..", "..#..", "..#..", ".....", "..#.."),
     "<": ("...#.", "..#..", ".#...", "..#..", "...#."),
     ">": (".#...", "..#..", "...#.", "..#..", ".#..."),
-    # Not a letter: the dash meter's icon. It lives in the font because the font
-    # already owns the per-colour, per-scale glyph cache and the shadow pass, and
-    # a five-by-five sprite that needed its own copy of all that would be a
+    # Not a letter: the dash meter's lightning bolt. It lives in the font because
+    # the font already owns the per-colour, per-scale glyph cache and the shadow
+    # pass, and a five-by-five sprite needing its own copy of all that would be a
     # second implementation of the same thing.
-    # The legs go to the outer columns, matching the arms above them. Pulled in
-    # by one they read as a blob with a notch rather than a five-pointed star,
-    # which is about the limit of what five pixels can say.
-    "*": ("..#..", ".###.", "#####", ".###.", "#...#"),
+    #
+    # Down-left, a kink jutting left, then down-left again. Chosen over five
+    # other five-pixel bolts by drawing them: the ones that keep a full-width
+    # middle row read as a blocky arrow, and the ones that taper to single
+    # pixels vanish at this size.
+    "*": ("..##.", ".##..", "####.", "..##.", ".##.."),
 }
 
 _UNKNOWN = ("#####", "#####", "#####", "#####", "#####")

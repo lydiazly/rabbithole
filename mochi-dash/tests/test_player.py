@@ -123,13 +123,23 @@ def test_hud_and_menu_strings_fit_the_canvas():
         assert pixelfont.text_width(text, scale) <= wd.WIDTH - 12, text
 
 
-def test_the_dash_meter_and_its_icon_stay_out_of_the_hotkeys():
-    """The icon pushed the bar right, and the bar had no room to spare given."""
-    used = (main.Game.HUD_MARGIN + pixelfont.GLYPH_W + 3
-            + main.Game.DASH_METER_W)
-    keys_start = wd.WIDTH - pixelfont.text_width("P PAUSE  R RETRY  M MENU") \
-        - main.Game.HUD_MARGIN
-    assert used < keys_start, f"meter ends at {used}, hotkeys start at {keys_start}"
+def test_the_dash_meter_ends_level_with_the_score_above_it():
+    """The bar is sized from the score line, so the two share both margins.
+
+    Left alone they were two left-aligned things of unrelated length, which
+    reads as sloppy rather than as one block.
+    """
+    for highscore, score in ((0, 0), (37, 140), (99999, 99999)):
+        line = f"HI {highscore:04d}  {score:04d}" if highscore else f"{score:04d}"
+        bar_x = main.Game.HUD_MARGIN + pixelfont.GLYPH_W + 3
+        span = max(main.Game.DASH_METER_MIN,
+                   main.Game.HUD_MARGIN + pixelfont.text_width(line) - bar_x)
+        text_end = main.Game.HUD_MARGIN + pixelfont.text_width(line)
+        if span > main.Game.DASH_METER_MIN:
+            assert bar_x + span == text_end, (line, bar_x + span, text_end)
+        keys_start = wd.WIDTH - pixelfont.text_width("P PAUSE  R RETRY  M MENU") \
+            - main.Game.HUD_MARGIN
+        assert bar_x + span < keys_start, f"{line}: bar reaches the hotkeys"
 
 
 def test_the_two_hud_corners_cannot_collide():
@@ -792,6 +802,54 @@ def test_the_dash_cannot_pay_for_itself():
     assert main.DASH_COOLDOWN > main.DASH_SECONDS, "no ordinary running between"
 
 
+def test_a_dash_never_expires_into_the_obstacle_it_is_touching():
+    """The frame an obstacle reaches the player is the frame it stops blocking.
+
+    The exit check looks ahead, and something touching you is no longer ahead of
+    you -- so the dash could expire on exactly the tick the last obstacle
+    arrived, and the collision, resolved later in the same frame, met a player
+    who had been invincible one line earlier. The exit hold made it systematic
+    rather than rare: it holds until the final blocker passes the player's nose,
+    which is precisely that tick.
+
+    Swept across a whole frame of travel, because the bug lives inside one.
+    """
+    import os
+    os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
+    import pygame
+    pygame.init()
+    pygame.display.set_mode((1, 1))
+
+    class Held(dict):
+        def __getitem__(self, key):
+            return self.get(key, False)
+
+    real = pygame.key.get_pressed
+    pygame.key.get_pressed = lambda: Held()
+    try:
+        for i in range(80):
+            game = main.Game()
+            game.start_run()
+            game.world.speed = wd.SPEED_MAX
+            game.start_dash()
+            game.world.hush(99.0)  # nothing else may spawn into the experiment
+            left, _, width, _ = game.player.hitbox()
+            step = game.world.scroll * main.DT
+            game.world.obstacles = [
+                wd.Obstacle(left + width + 1 + i * step / 80,
+                            wd.GROUND_Y - wd.SMALL_BOX[1], *wd.SMALL_BOX, "small")
+            ]
+            game.dash_left = main.DT * 0.5  # expires on the very next tick
+            for _ in range(6):
+                game.update(main.DT)
+                assert game.state == main.PLAYING, (
+                    f"sub-frame offset {i}/80: the dash ended into its own "
+                    f"last obstacle"
+                )
+    finally:
+        pygame.key.get_pressed = real
+
+
 def test_the_dash_exit_needs_room_to_react():
     """Ending the boost with an obstacle at your face is an unavoidable death.
 
@@ -830,19 +888,32 @@ def test_the_end_of_a_dash_says_so_in_more_than_one_way():
     # The prompt grows and then goes. Growing is what makes it catchable late:
     # a blink is only visible if you were looking when it started, whereas
     # something mid-growth still reads as having just appeared.
-    scales = [main.pop_scale(t / 60) for t in range(int(main.DASH_RECOVERY * 60))]
-    shown = [s for s in scales if s]
-    assert shown == sorted(shown), f"the pop is not monotonic: {shown}"
-    assert shown[0] < shown[-1], "it never actually grows"
-    assert scales[-1] == 0, "the prompt outstays the breather"
-    # And the quiet has to outlast the words, or there is no prepare in it.
-    pop = sum(seconds for _, seconds in main.DASH_OVER_POP)
-    assert pop < main.DASH_RECOVERY / 2, f"pop {pop}s of {main.DASH_RECOVERY}s"
+    # The prompt pulses. Whenever you look at it, it is mid-pulse -- which is
+    # the point: a blink is invisible unless you caught its start, and a single
+    # grow is over before a late glance lands.
+    seen = {main.pulse_scale(t / 60) for t in range(int(main.PULSE_BEAT * 60) + 1)}
+    assert seen == set(main.PROMPT_SCALES), f"the pulse does not swell: {seen}"
+    seen = {main.pulse_scale(t / 60, main.COUNT_SCALES)
+            for t in range(int(main.PULSE_BEAT * 60) + 1)}
+    assert seen == set(main.COUNT_SCALES), seen
+    # It swells for less than it settles, or it reads as a wobble, not a beat.
+    assert 0 < main.PULSE_SWELL < 0.5
 
-    # Every size it grows to has to fit the canvas.
-    for scale, _ in main.DASH_OVER_POP:
-        width = pixelfont.text_width(main.DASH_OVER_PROMPT, scale)
-        assert width <= wd.WIDTH - 12, f"scale {scale} is {width}px"
+    # Both sizes of everything pulsed have to fit the canvas.
+    for scale in main.PROMPT_SCALES:
+        for line in (main.DASH_OVER_PROMPT, main.DASH_PROMPT):
+            width = pixelfont.text_width(line, scale)
+            assert width <= wd.WIDTH - 12, f"{line!r} at {scale}x is {width}px"
+    for scale in main.COUNT_SCALES:
+        for n in range(1, main.DASH_COUNTDOWN_FROM + 1):
+            assert pixelfont.text_width(str(n), scale) <= wd.WIDTH - 12
+
+    # The warning starts while the dash is still up, so it arrives with time
+    # left to act on, and the countdown carries straight on from it.
+    assert main.DASH_WARN_SECONDS > 0
+    assert main.DASH_RECOVERY >= main.DASH_COUNTDOWN_FROM, (
+        "the countdown would run out before the breather does"
+    )
 
 
 def test_the_shake_settles_instead_of_leaving_the_screen_crooked():
@@ -1009,6 +1080,36 @@ def test_dying_does_not_sound_like_a_dash_ending():
     assert game.world.quiet == 0.0, "a finished run got a breather"
 
 
+def test_each_dash_costs_more_than_the_one_before():
+    """The cooldown stopped dashes chaining but not from staying cheap.
+
+    Once the speed is up, a fixed twenty points comes round quickly, and a
+    reward on a fixed tariff stops reading as a reward. The bar has to read
+    against the current price, not the first one, or it fills to full and then
+    keeps going while nothing happens.
+    """
+    import os
+    os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
+    import pygame
+    pygame.init()
+    pygame.display.set_mode((1, 1))
+    game = main.Game()
+    game.start_run()
+
+    targets = []
+    for _ in range(4):
+        targets.append(game.dash_target)
+        game.start_dash()
+    assert targets == sorted(targets) and len(set(targets)) == 4, targets
+    assert targets[0] == main.DASH_EVERY
+    for a, b in zip(targets, targets[1:]):
+        assert b - a == main.DASH_EVERY_STEP
+
+    # And a fresh run starts back at the first price.
+    game.go_to_title()
+    assert game.dash_target == main.DASH_EVERY
+
+
 def test_the_dash_is_never_the_colour_of_nightfall():
     """The dash has to be legible as the dash at any hour.
 
@@ -1085,8 +1186,20 @@ def test_pausing_freezes_the_run_and_only_the_run(monkeypatch):
 
 
 def test_the_dash_prompt_gets_out_of_the_way():
-    """Long enough to read on a first dash, short enough not to live there."""
-    assert 0.0 < main.DASH_PROMPT_SECONDS < main.DASH_SECONDS / 2
+    """Long enough to read on a first dash, gone before the warning starts.
+
+    The two prompts occupy the same row and mean opposite things, so the one
+    that has to be out of the way is "smash through" -- it must finish before
+    the dash begins telling the player it is about to end, or it gets cut off
+    mid-sentence by its own successor. Half the dash was the old bound and it
+    was arbitrary; this one is the collision that actually matters.
+    """
+    assert main.DASH_PROMPT_SECONDS > 0.0
+    warning_starts = main.DASH_SECONDS - main.DASH_WARN_SECONDS
+    assert main.DASH_PROMPT_SECONDS < warning_starts, (
+        f"prompt runs {main.DASH_PROMPT_SECONDS}s, warning starts at "
+        f"{warning_starts}s"
+    )
     assert len(main.DASH_PROMPT.split()) == 2, "two words, as asked"
 
 
