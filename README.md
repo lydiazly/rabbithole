@@ -66,7 +66,7 @@ game's output goes to `~/Library/Logs/rabbithole/` on macOS and
 
 ## Letting Claude Code tell you when to play
 
-摸鱼也要摸得有提示。The point of the whole thing is the wait, so Claude Code can
+The point of the whole thing is the wait, so Claude Code can
 run the game for you: it nudges you when a turn is taking a while, and pauses the
 game the moment your attention is wanted back.
 
