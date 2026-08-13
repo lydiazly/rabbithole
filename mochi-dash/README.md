@@ -17,6 +17,8 @@ Neither choice changes the difficulty. Every character collides through the same
 box whatever shape its face is, and neither scene is harder than the other, so
 picking is a matter of mood.
 
+![Momo mid-run in the desert, and Coco on a snowfield at night](../media/mochi-dash.png)
+
 Play it in a browser with nothing to install:
 <https://lydiazly.github.io/rabbithole/>
 
