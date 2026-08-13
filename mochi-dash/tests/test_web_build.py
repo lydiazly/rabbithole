@@ -17,6 +17,7 @@ from pathlib import Path
 
 import pytest
 
+from mochi_dash import icon as game_icon
 from mochi_dash import main as game
 from mochi_dash import world as wd
 
@@ -143,11 +144,46 @@ def test_the_page_script_refuses_the_context_menu():
 
 def test_the_favicon_is_a_square_of_momo():
     """Square because tabs are, and not blank -- a transparent icon is invisible."""
-    icon = script("make_favicon").build()
-    assert icon.get_size() == (64, 64)
+    icon = game_icon.build()
+    assert icon.get_size() == (game_icon.SIZE, game_icon.SIZE)
     opaque = sum(
         icon.get_at((x, y)).a > 0
         for x in range(icon.get_width())
         for y in range(icon.get_height())
     )
-    assert opaque > 64 * 64 // 4, "Momo covers almost none of the icon"
+    assert opaque > game_icon.SIZE**2 // 4, "Momo covers almost none of the icon"
+
+
+def test_the_window_wears_the_same_icon_as_the_tab(monkeypatch):
+    """The taskbar and the browser tab are one picture, built once.
+
+    Set before `set_mode`, which is when SDL takes the icon the window will
+    wear: afterwards it is a change to an existing window, which some window
+    managers apply and some ignore. Ordering is the whole of this test, because
+    getting it wrong looks exactly like getting it right on the machine that
+    happened to work.
+    """
+    import pygame
+
+    pygame.init()
+    calls = []
+    real_icon, real_mode = pygame.display.set_icon, pygame.display.set_mode
+    monkeypatch.setattr(pygame.display, "set_icon",
+                        lambda surf: calls.append(("icon", surf)))
+    monkeypatch.setattr(pygame.display, "set_mode",
+                        lambda *a, **k: (calls.append(("mode", None))
+                                         or real_mode(*a, **k)))
+    monkeypatch.setattr(game.storage, "BROWSER", False)
+    game.Game()
+
+    order = [what for what, _ in calls]
+    assert order[:2] == ["icon", "mode"], order
+    assert calls[0][1].get_size() == (game_icon.SIZE, game_icon.SIZE)
+
+    # And not in a browser, where the tab's icon comes from the page and the
+    # window this would dress does not exist.
+    calls.clear()
+    monkeypatch.setattr(game.storage, "BROWSER", True)
+    game.Game()
+    assert [what for what, _ in calls] == ["mode"]
+    pygame.display.set_icon = real_icon

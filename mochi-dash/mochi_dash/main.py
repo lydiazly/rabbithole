@@ -15,7 +15,17 @@ import sys
 
 import pygame
 
-from . import characters, effects, pixelfont, scenes, sfx, sprites, storage, world
+from . import (
+    characters,
+    effects,
+    icon,
+    pixelfont,
+    scenes,
+    sfx,
+    sprites,
+    storage,
+    world,
+)
 from .palette import step_at
 from .player import HARD_LANDING, Player, idle_body_frame
 
@@ -270,6 +280,13 @@ def pulse_scale(elapsed: float, scales=PROMPT_SCALES) -> int:
 class Game:
     def __init__(self):
         self.rng = random.Random()
+        # Before set_mode, which is when the window is created and when SDL
+        # takes the icon it will wear. Set afterwards it is a change to a window
+        # that already exists, which some window managers pick up and some do
+        # not. Skipped in a browser: the tab's icon comes from the page, and the
+        # window this would dress does not exist there.
+        if not storage.BROWSER:
+            pygame.display.set_icon(icon.build())
         self.screen = pygame.display.set_mode(
             (world.WIDTH * SCALE, world.HEIGHT * SCALE)
         )

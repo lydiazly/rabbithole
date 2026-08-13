@@ -1,9 +1,8 @@
-"""Draw the browser tab icon from the game's own art.
+"""Write the browser tab icon to a PNG for the built page.
 
-Momo is a few rows of characters in sprites.py, built into a Surface by the same
-code the game draws with, so the icon cannot drift from the character: recolour
-Momo and the tab follows. That is the same reason there are no image files in
-this project -- see the note at the top of sfx.py about the sound.
+The picture itself is mochi_dash.icon, which the desktop window also uses -- see
+the note there. This file is only the part the page build needs and the game does
+not: a file on disk.
 
 usage: python web/make_favicon.py build/favicon.png
 """
@@ -19,31 +18,7 @@ os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
 
 import pygame  # noqa: E402
 
-from mochi_dash import characters  # noqa: E402
-
-# 64 square because tab icons are square and Momo is not: the pose is 14x12, so
-# it is scaled by a whole number and centred, leaving a little air. A fractional
-# scale would blur the one thing a pixel character cannot afford to lose.
-SIZE = 64
-SCALE = 4
-POSE = "round"  # the resting shape, the one that reads as Momo at any size
-DAY = 0  # the daylight end of the palette ramp
-
-
-def build() -> pygame.Surface:
-    sheet = characters.sheet_for(characters.DEFAULT, DAY)
-    momo = sheet.poses[POSE]
-    scaled = pygame.transform.scale_by(momo, SCALE)
-
-    icon = pygame.Surface((SIZE, SIZE), pygame.SRCALPHA)
-    icon.blit(
-        scaled,
-        (
-            (SIZE - scaled.get_width()) // 2,
-            (SIZE - scaled.get_height()) // 2,
-        ),
-    )
-    return icon
+from mochi_dash.icon import SIZE, build  # noqa: E402
 
 
 def main() -> None:
