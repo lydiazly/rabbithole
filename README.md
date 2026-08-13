@@ -1,20 +1,20 @@
 # rabbithole
 
-**摸鱼小游戏。** 等待 AI agent 的过程中轻松一下。
+ \~\~\~ 摸鱼小游戏 \~\~\~ 等待 AI agent 工作时轻松一下 :)
 
-**Games for slacking off.** Something to do while an AI agent is thinking.
+**Games for slacking off.** Something to do while waiting for your AI agent :)
 
-![Mochi Dash](mochi-dash.png)
+推荐玩下面这款 **[mochi-dash](mochi-dash/README.md)**：比小恐龙丰富一丢丢的色彩和手感。不同角色、不同场景，
+难度完全没有区别 —— 选什么完全只看我心情！没有复杂的玩法，也没有终点。摸鱼时拒绝压力！
 
-推荐 **[mochi-dash](mochi-dash/README.md)**：比小恐龙丰富一丢丢的色彩和手感。不同角色、不同场景，
-难度完全没有区别 —— 选什么看我心情！没有复杂的玩法，也没有终点。摸鱼时拒绝压力。
+[浏览器也可以玩](https://lydiazly.github.io/rabbithole/)
+[![Mochi Dash](mochi-dash.png)](https://lydiazly.github.io/rabbithole/)
 
-Start with **[mochi-dash](mochi-dash/README.md)**: a bit more colour and a bit
-more feel than the dino. Four characters, two places to run, and not one of them
-is any harder than another — pick whichever you are in the mood for. Nothing to
-learn, nowhere to get to, and nothing at stake while you are meant to be working.
+_其他小游戏只是凑数的..._
 
-Play it in a browser, no install: <https://lydiazly.github.io/rabbithole/>
+_我太懒了不想写双语了，反正都是 AI 写..._
+
+_反正代码也是 vibe coding 的..._
 
 ## Playing
 
@@ -22,8 +22,8 @@ Each game is a self-contained [uv](https://docs.astral.sh/uv/) project in its ow
 directory. `play` finds them, so nothing needs listing anywhere:
 
 ```sh
-./play           # pick from a menu
-./play snake     # start one directly
+./play             # pick from a menu
+./play mochi-dash  # start one directly
 ```
 
 `R` plays again and `Q` quits, in all of them.
@@ -39,7 +39,7 @@ directory. `play` finds them, so nothing needs listing anywhere:
 The terminal games are pure standard library, so there is nothing to install:
 
 ```sh
-uvx --from "git+https://github.com/lydiazly/rabbithole#subdirectory=snake" snake
+uvx --from "git+https://github.com/lydiazly/rabbithole#subdirectory=mochi-dash" mochi-dash
 ```
 
 Mochi Dash plays in the browser at the link above, built by
