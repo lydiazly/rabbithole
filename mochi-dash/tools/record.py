@@ -40,6 +40,19 @@ DELAY_CS = 100 // FPS
 # pixels of the 3x window.
 SCALE = 2
 
+# A hard ceiling on a clip, enforced where frames are appended rather than
+# trusted to the caller. This is not tidiness: an earlier version waited on a
+# condition with an unbounded loop, the scripted player died so the condition
+# never came true, and the recorder grew to 22GB and was OOM-killed -- taking
+# the terminal it was started from with it. Twenty seconds is already far longer
+# than a README clip; anything past it is a bug, and it should say so while it
+# still fits in memory.
+MAX_FRAMES = 400
+
+# The shape of the run clip, in game ticks at 60/s.
+ON_FOOT = 330     # 5.5s of ordinary play, which is what the clip is mostly for
+AFTER_DASH = 30   # half a second past the boost dropping, then cut
+
 
 class Held(dict):
     """pygame's key state is a sequence over every scancode; this fakes it."""
@@ -58,14 +71,36 @@ class Recorder:
         self.game.rng.seed(seed)
         self.frames = []
         self.tick = 0
+        self.frame = lambda: self.step(1)  # a clip with input replaces this
 
     def step(self, count=1, capture=True):
         for _ in range(count):
             self.game.update(m.DT)
             self.game.draw()
             if capture and self.tick % EVERY == 0:
+                if len(self.frames) >= MAX_FRAMES:
+                    raise RuntimeError(
+                        f"clip ran past {MAX_FRAMES} frames "
+                        f"({MAX_FRAMES / FPS:.0f}s) -- something is not ending"
+                    )
                 self.frames.append(self.grab())
             self.tick += 1
+
+    def until(self, ready, limit: int, what: str):
+        """Step until `ready()`, or fail saying what never happened.
+
+        Every wait in here is bounded. The condition being waited on depends on
+        a scripted player staying alive, and a player that dies satisfies
+        nothing, ever.
+        """
+        for _ in range(limit):
+            if ready():
+                return
+            self.frame()
+        raise RuntimeError(f"waited {limit / 60:.0f}s and {what}")
+
+    def alive(self) -> bool:
+        return self.game.state == m.PLAYING
 
     def grab(self):
         canvas = self.game.canvas
@@ -76,13 +111,27 @@ class Recorder:
     def save(self, path: Path):
         """Write the frames as a looping GIF.
 
-        Quantised against one palette taken from the first frame rather than a
-        fresh one per frame: the scenes use a couple of dozen flat colours, so a
-        shared palette is both exact and far smaller, and it stops the sky
-        shimmering between frames as the encoder picks slightly different
-        approximations of the same blue.
+        One palette for the whole clip, built from the colours every frame
+        actually uses. Two things this must not be: a fresh palette per frame,
+        which makes the sky shimmer as the encoder re-approximates the same blue;
+        and -- the mistake this replaces -- a palette taken from the *first*
+        frame, which held 14 of the 29 colours the menu goes on to draw, so every
+        character after the first was rendered in the nearest wrong colour.
+
+        These scenes are flat pixel art, a few dozen colours in total, so the
+        union fits inside a GIF's 256 and the result is exact rather than
+        approximate. The fallback matters only if that ever stops being true.
         """
-        palette = self.frames[0].quantize(colors=256, method=Image.MEDIANCUT)
+        used = sorted({c for f in self.frames for c in f.get_flattened_data()})
+        if len(used) <= 256:
+            palette = Image.new("P", (1, 1))
+            flat = [channel for colour in used for channel in colour]
+            palette.putpalette(flat + [0] * (768 - len(flat)))
+        else:
+            print(f"  note: {len(used)} colours, more than a GIF can hold exactly")
+            tall = Image.new("RGB", (len(used), 1))
+            tall.putdata(used)
+            palette = tall.quantize(colors=256, method=Image.MEDIANCUT)
         frames = [f.quantize(palette=palette, dither=Image.Dither.NONE)
                   for f in self.frames]
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -106,20 +155,22 @@ def menu_cycle(row: int, options: int, out: Path, seed=7):
     rec.save(out)
 
 
-def a_run(out: Path, seed=3):
-    """A run: clear a few obstacles, earn a dash, smash through the rest.
+def a_run(out: Path, seed=2):
+    """A run: obstacles cleared on foot, then a dash smashing through them.
 
-    The dash is granted rather than played for -- earning one takes twenty
-    points, which is far longer than anybody watches a README. Everything after
-    that is the real thing: the same boost, the same smashing, the same handover
-    at the end.
+    Recorded at two thirds of the speed ramp, which is where the scripted player
+    can actually survive -- at the top it dies on every seed tried, and a clip
+    that ends in a death is not the advertisement. It costs nothing in density:
+    spawn gaps are specified in seconds, so the traffic here is within a tenth
+    of a second of the traffic at top speed.
+
+    The dash is granted rather than played for, since earning one takes twenty
+    points and far longer than anybody watches a README. Everything after that
+    is the real thing -- the same boost, the same smashing.
     """
     rec = Recorder(seed)
     rec.game.start_run()
-    # Near the top of the ramp, which is where the game is worth showing: the
-    # opening is deliberately empty while a newcomer finds the jump, and an
-    # empty desert is a poor advertisement for an obstacle course.
-    rec.game.world.speed = wd.SPEED_MAX - 20.0
+    rec.game.world.speed = 150.0
     rec.game.score, rec.game.highscore = 138, 431
     hold = 0
 
@@ -136,25 +187,51 @@ def a_run(out: Path, seed=3):
         if ahead and not rec.game.dashing:
             ob = min(ahead, key=lambda o: o.x)
             eta = (ob.x - front) / max(1.0, rec.game.world.scroll)
-            ducks = ob.y + ob.h < wd.GROUND_Y - 1
-            if ducks:
+            if ob.y + ob.h < wd.GROUND_Y - 1:
                 if eta < 0.4:
                     rec.held[m.DUCK_KEYS[0]] = True
-            elif eta < 0.42 and rec.game.player.on_ground and hold == 0:
+            elif eta < 0.46 and rec.game.player.on_ground and hold == 0:
                 rec.game.jump_buffer = m.JUMP_BUFFER
                 hold = 18  # held, or the jump is only the smallest hop
         rec.step(1)
 
-    for _ in range(110):          # a few obstacles cleared on foot
+    rec.frame = frame
+
+    # On foot first, and long enough to read as the ordinary game: several
+    # things jumped and ducked before anything special happens.
+    for _ in range(ON_FOOT):
         frame()
+        if not rec.alive():
+            raise RuntimeError(
+                f"the scripted player died {rec.tick} ticks in -- pick another "
+                f"seed or a slower speed, do not record a clip that ends badly"
+            )
+
     rec.game.toward_dash = rec.game.dash_target
     rec.game.dash_cooldown = 0.0
-    while not rec.game.dashing:   # granted on the next update
-        frame()
-    while rec.game.dashing:       # the whole dash, smashing as it goes
-        frame()
-    for _ in range(190):          # the countdown, and the next obstacle arriving
-        frame()
+    rec.until(lambda: rec.game.dashing, 120, "the dash never started")
+
+    smashed, seen = 0, {id(o) for o in rec.game.world.obstacles if o.launched}
+    def count():
+        nonlocal smashed
+        for ob in rec.game.world.obstacles:
+            if ob.launched and id(ob) not in seen:
+                seen.add(id(ob))
+                smashed += 1
+
+    rec.until(lambda: (count(), not rec.game.dashing)[1], 700, "the dash never ended")
+
+    # Cut here rather than playing out the handover. Its three seconds of empty
+    # screen counting down are the right design in the game and dead air in a
+    # loop -- and the loop point is better on the dash than on nothing.
+    rec.step(AFTER_DASH)
+
+    if smashed < 4:
+        raise RuntimeError(
+            f"only {smashed} obstacles smashed on camera -- the dash is the "
+            f"point of this clip, so a retune that empties it should fail here"
+        )
+    print(f"  ({smashed} obstacles smashed on camera)")
     rec.save(out)
 
 
