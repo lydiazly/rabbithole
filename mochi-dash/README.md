@@ -3,6 +3,20 @@
 An endless runner in a window, named for how the characters move. Part of
 [rabbithole](../README.md).
 
+![A run: clearing obstacles, then a dash flattening them](../media/dash.gif)
+
+Jump what you can, and every so often earn a **dash** — a few seconds of running
+much faster and smashing straight through whatever is in the way, then a
+countdown handing the ground back to you.
+
+| pick a character | pick a place |
+|---|---|
+| ![Cycling the characters](../media/menu-characters.gif) | ![Cycling the scenes](../media/menu-scenes.gif) |
+
+Neither choice changes the difficulty. Every character collides through the same
+box whatever shape its face is, and neither scene is harder than the other, so
+picking is a matter of mood.
+
 Play it in a browser with nothing to install:
 <https://lydiazly.github.io/rabbithole/>
 
@@ -14,11 +28,8 @@ Or from a checkout:
 
 ## The cast
 
-The menu picks a character and a place to run through — Momo the slime, Coco the
-cat, Jojo the bird or Bobo the shiba, in a desert or a snowfield. Both choices
-are looks only. Every character collides through the same box whatever shape its
-face is, and neither scene is any harder than the other, so picking is a matter
-of mood and nothing else.
+Momo the slime, Coco the cat, Jojo the bird and Bobo the shiba, in a desert or a
+snowfield.
 
 ## Controls
 
@@ -62,9 +73,17 @@ it goes to localStorage instead.
 
 ```sh
 uv run pytest -q          # no window needed; SDL runs headless
+
+# Re-record the animations above, straight from the game
+uv run --with pillow python tools/record.py ../media
 ```
 
+Nothing in `media/` is hand-captured. `tools/record.py` drives the real `Game`
+with scripted input and a seeded RNG, so the same command twice gives the same
+bytes, and a recolour or a retune is one command away from matching media rather
+than quietly out of date.
+
 `web/` holds the three pieces the browser build needs beyond the game itself: the
-favicon is drawn from the sprite code, and the page's stylesheet and its one
-script are injected into what pygbag builds. `.github/workflows/pages.yml` runs
+favicon is drawn from the same sprite code the window's icon is, and the page's
+stylesheet and its one script are injected into what pygbag builds. `.github/workflows/pages.yml` runs
 the suite first, so a red test stops the deploy.

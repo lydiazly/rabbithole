@@ -8,7 +8,7 @@
 难度完全没有区别 —— 选什么完全只看我心情！没有复杂的玩法，也没有终点。摸鱼时拒绝压力！
 
 [浏览器也可以玩](https://lydiazly.github.io/rabbithole/)
-[![Mochi Dash](mochi-dash.png)](https://lydiazly.github.io/rabbithole/)
+[![Mochi Dash](media/mochi-dash.png)](https://lydiazly.github.io/rabbithole/)
 
 _其他小游戏只是凑数的..._
 
