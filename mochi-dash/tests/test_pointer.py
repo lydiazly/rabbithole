@@ -28,13 +28,13 @@ def game(tmp_path, monkeypatch):
     return m.Game()
 
 
-def click(game, x, y, down=True, touch=False):
+def click(game, x, y, down=True, touch=False, button=m.MOUSE_JUMP_BUTTON):
     """A mouse press at a canvas coordinate, delivered through the real path."""
     width, height = game.screen.get_size()
     pos = (x * width / wd.WIDTH, y * height / wd.HEIGHT)
     kind = pygame.MOUSEBUTTONDOWN if down else pygame.MOUSEBUTTONUP
     pygame.event.clear()
-    pygame.event.post(pygame.event.Event(kind, pos=pos, button=1, touch=touch))
+    pygame.event.post(pygame.event.Event(kind, pos=pos, button=button, touch=touch))
     game.handle_events()
 
 
@@ -47,17 +47,60 @@ def tap(game, x, y, down=True):
     game.handle_events()
 
 
-def test_pressing_high_jumps_and_pressing_low_ducks(game):
-    game.start_run()
-    click(game, 150, 20)
-    assert game.jump_buffer == m.JUMP_BUFFER
-    assert game.pointer_jump and not game.pointer_duck
+def test_the_mouse_jumps_on_the_left_button_and_ducks_on_the_right(game):
+    """A mouse has buttons, so it is asked with buttons rather than by height.
 
-    click(game, 150, 20, down=False)
+    Height would make the action depend on where the cursor happened to be
+    resting, which is not something a mouse player is tracking.
+    """
+    game.start_run()
+    click(game, 150, 20, button=m.MOUSE_JUMP_BUTTON)
+    assert game.pointer_jump and not game.pointer_duck
+    assert game.jump_buffer == m.JUMP_BUFFER
+
+    game.jump_buffer = 0.0
+    # Deliberately in the low half: position must not matter to a mouse.
+    click(game, 150, wd.HEIGHT - 4, button=m.MOUSE_DUCK_BUTTON)
+    assert game.pointer_duck
+    assert game.jump_buffer == 0.0, "the duck button also jumped"
+
+    # And the reverse: the jump button low down still jumps.
+    click(game, 150, wd.HEIGHT - 4, button=m.MOUSE_JUMP_BUTTON)
+    assert game.jump_buffer == m.JUMP_BUFFER
+
+
+def test_each_mouse_button_releases_only_itself(game):
+    """Both can be held at once, and letting go of one must not free the other."""
+    game.start_run()
+    click(game, 150, 20, button=m.MOUSE_JUMP_BUTTON)
+    click(game, 150, 20, button=m.MOUSE_DUCK_BUTTON)
+    assert game.pointer_jump and game.pointer_duck
+
+    click(game, 150, 20, down=False, button=m.MOUSE_JUMP_BUTTON)
+    assert not game.pointer_jump and game.pointer_duck, "the right button let go too"
+    click(game, 150, 20, down=False, button=m.MOUSE_DUCK_BUTTON)
+    assert not game.pointer_duck
+
+
+def test_a_middle_click_means_nothing(game):
+    game.start_run()
+    click(game, 150, 20, button=2)
+    assert not game.pointer_jump and not game.pointer_duck
+    assert game.jump_buffer == 0.0
+
+
+def test_a_finger_jumps_high_and_ducks_low(game):
+    """A finger has no buttons, so it is asked by position instead."""
+    game.start_run()
+    tap(game, 150, 20)
+    assert game.pointer_jump and not game.pointer_duck
+    assert game.jump_buffer == m.JUMP_BUFFER
+
+    tap(game, 150, 20, down=False)
     assert not game.pointer_jump
 
     game.jump_buffer = 0.0
-    click(game, 150, wd.HEIGHT - 4)
+    tap(game, 150, wd.HEIGHT - 4)
     assert game.pointer_duck and not game.pointer_jump
     assert game.jump_buffer == 0.0, "a press meant to duck also jumped"
 
@@ -127,6 +170,26 @@ def test_the_title_and_the_banner_take_a_press(game):
     assert game.state == m.TITLE
 
 
+def test_only_the_left_button_works_the_menus(game):
+    """Right-clicking a menu means duck, and duck means nothing on a menu.
+
+    Left as "any button confirms", a player crouching as the run ended would
+    dismiss the banner with the same press.
+    """
+    for enter, expected in ((game.go_to_title, m.TITLE), (game.go_to_menu, m.MENU)):
+        enter()
+        click(game, 150, 30, button=m.MOUSE_DUCK_BUTTON)
+        assert game.state == expected, "the right button worked a menu"
+
+    game.start_run()
+    game.end_run()
+    game.over_timer = m.GAME_OVER_LOCKOUT
+    click(game, 150, 50, button=m.MOUSE_DUCK_BUTTON)
+    assert game.state == m.GAME_OVER
+    click(game, 150, 50, button=m.MOUSE_JUMP_BUTTON)
+    assert game.state == m.TITLE
+
+
 def test_a_press_does_nothing_while_paused(game):
     game.start_run()
     game.paused = True
@@ -157,14 +220,14 @@ def test_pressing_below_the_menu_starts_the_game(game):
     assert game.state == m.TITLE
 
 
-def test_releasing_anywhere_lets_go(game):
+def test_a_finger_lifted_anywhere_lets_go(game):
     """A release outside the zone it was pressed in must still end the press,
     or a finger dragged up the screen leaves the character crouched forever.
     """
     game.start_run()
-    click(game, 150, wd.HEIGHT - 4)
+    tap(game, 150, wd.HEIGHT - 4)
     assert game.pointer_duck
-    click(game, 150, 4, down=False)
+    tap(game, 150, 4, down=False)
     assert not game.pointer_duck and not game.pointer_jump
 
 

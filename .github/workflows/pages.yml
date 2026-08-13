@@ -63,7 +63,8 @@ jobs:
         run: |
           uv run --directory mochi-dash python web/restyle.py \
             ../stage/mochi-dash/build/web/index.html \
-            web/page.css
+            web/page.css \
+            web/page.js
 
       # Pages has to be switched on by hand once, under Settings -> Pages, with
       # "GitHub Actions" as the source. This step's `enablement: true` looks like

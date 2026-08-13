@@ -59,9 +59,10 @@ further back buying reaction time. `P` pauses — clicking away from the window
 pauses too, though coming back does not un-pause, so you land where you left
 off. `M` reopens the menu, which also switches the sound off.
 
-It also plays by mouse or touch, which is how the web build works on a phone:
-press the sky to jump and hold for a higher one, press the character or the
-ground to duck, and press anywhere to get through the menus.
+It also plays by mouse or touch. Left button jumps and right button ducks, held
+for a higher jump the same way the keys are. On a touchscreen, where there are
+no buttons to tell apart, press the sky to jump and the character or the ground
+to duck. Either way a press gets you through the menus.
 
 It opens easy — nothing but single cacti while you find the jump — and adds
 taller ones, clusters and flyers as it speeds up, spacing them a little tighter

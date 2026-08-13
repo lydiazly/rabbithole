@@ -76,12 +76,18 @@ JUMP_BUFFER = 0.12  # a press just before landing still counts
 # shorter and would rely on that synthesis being on, which is not something this
 # code can check from here.
 #
-# Screen splits in two: press low to duck, press anywhere above to jump. That is
-# the whole scheme, because the game only ever asks for those two things, and
-# because "down" being at the bottom needs no explaining. Holding matters as much
-# as on the keyboard -- the jump is variable-height, so a tap is a hop and a held
-# press is the full arc.
+# A mouse is read by button and a finger by position, because each is asked the
+# question it can answer. Left jumps, right ducks: two buttons for the two things
+# the game asks for, with no cursor to aim. Reading a mouse by height instead
+# would make the action depend on where the pointer happened to be resting,
+# which is not something a mouse player is tracking.
+MOUSE_JUMP_BUTTON = 1
+MOUSE_DUCK_BUTTON = 3
+# Holding matters as much as on the keyboard either way -- the jump is
+# variable-height, so a click is a hop and a held button is the full arc.
 #
+# A finger has no buttons, so the screen splits in two for it: press low to duck,
+# press anywhere above to jump, "down" being at the bottom needing no explaining.
 # The line is the standing character's own crown, so the duck half is exactly the
 # character and the ground beneath it and the jump half is the sky. Derived
 # rather than picked: two thirds of the canvas happens to land on the same row
@@ -475,17 +481,24 @@ class Game:
 
     def handle_pointer(self, event) -> bool:
         """Returns whether the event was a pointer one, handled or not."""
-        down = event.type in (pygame.MOUSEBUTTONDOWN, pygame.FINGERDOWN)
-        up = event.type in (pygame.MOUSEBUTTONUP, pygame.FINGERUP)
-        if not (down or up):
+        mouse = event.type in (pygame.MOUSEBUTTONDOWN, pygame.MOUSEBUTTONUP)
+        finger = event.type in (pygame.FINGERDOWN, pygame.FINGERUP)
+        if not (mouse or finger):
             return False
         # The synthesised twin of a real touch. Dropped rather than acted on, so
         # a phone gets one press per press.
-        if getattr(event, "touch", False):
+        if mouse and getattr(event, "touch", False):
             return True
-        if up:
-            self.pointer_jump = False
-            self.pointer_duck = False
+
+        if event.type in (pygame.MOUSEBUTTONUP, pygame.FINGERUP):
+            # A finger has no buttons to tell apart, so it lets go of both. A
+            # mouse releases only the one it is releasing, which is what lets a
+            # player hold both at once and have the release of one leave the
+            # other alone.
+            if finger or event.button == MOUSE_JUMP_BUTTON:
+                self.pointer_jump = False
+            if finger or event.button == MOUSE_DUCK_BUTTON:
+                self.pointer_duck = False
             return True
 
         point = self.canvas_point(event)
@@ -493,6 +506,12 @@ class Game:
             return True
         x, y = point
 
+        if self.state == PLAYING and not self.paused:
+            self.press_in_play(event, mouse, y)
+            return True
+        # Everywhere else is a menu, and menus take the button a menu takes.
+        if mouse and event.button != MOUSE_JUMP_BUTTON:
+            return True
         if self.state == MENU:
             self.menu_point(x, y)
         elif self.state == TITLE:
@@ -503,16 +522,30 @@ class Game:
                 self.go_to_menu()
             else:
                 self.start_run()
-        elif self.state == GAME_OVER:
-            if self.over_timer >= GAME_OVER_LOCKOUT:
-                self.go_to_title()
-        elif self.state == PLAYING and not self.paused:
-            if y >= POINTER_DUCK_FROM:
-                self.pointer_duck = True
-            else:
-                self.pointer_jump = True
-                self.jump_buffer = JUMP_BUFFER
+        elif self.state == GAME_OVER and self.over_timer >= GAME_OVER_LOCKOUT:
+            self.go_to_title()
         return True
+
+    def press_in_play(self, event, mouse: bool, y: float) -> None:
+        """A press during a run, which is the only place the two devices differ.
+
+        A mouse has buttons and a finger has a position, so each is asked the
+        question it can answer. Reading a mouse by height would make the two
+        actions depend on where the cursor happened to be resting, which is not
+        something a mouse player is thinking about; reading a finger by button
+        is not possible at all.
+        """
+        if mouse:
+            wants_duck = event.button == MOUSE_DUCK_BUTTON
+            if not wants_duck and event.button != MOUSE_JUMP_BUTTON:
+                return  # a middle click or a thumb button means nothing here
+        else:
+            wants_duck = y >= POINTER_DUCK_FROM
+        if wants_duck:
+            self.pointer_duck = True
+        else:
+            self.pointer_jump = True
+            self.jump_buffer = JUMP_BUFFER
 
     def menu_point(self, x: float, y: float) -> None:
         """A press on the select screen: pick a row, an arrow, or start."""

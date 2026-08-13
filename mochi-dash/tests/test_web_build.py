@@ -120,6 +120,27 @@ def test_restyling_a_page_it_does_not_recognise_is_an_error():
         script("restyle").restyle("<html><body>no head</body></html>", "b{}")
 
 
+def test_the_page_script_is_injected_and_stays_optional():
+    """The right mouse button ducks, so the browser's own context menu has to be
+    refused -- and only the page can refuse it, which is the whole reason there
+    is a script. Optional because the stylesheet came first and the two-argument
+    call still has to work.
+    """
+    restyle = script("restyle").restyle
+    page = "<head></head><body></body>"
+    assert "<script>" not in restyle(page, "b{}")
+    out = restyle(page, "b{}", "addEventListener('contextmenu', f)")
+    assert out.index("<style>") < out.index("<script>") < out.index("</head>")
+
+
+def test_the_page_script_refuses_the_context_menu():
+    """Pinned by content: without this, every duck in a desktop browser opens a
+    menu on top of the game.
+    """
+    source = (ROOT / "web" / "page.js").read_text()
+    assert "contextmenu" in source and "preventDefault" in source
+
+
 def test_the_favicon_is_a_square_of_momo():
     """Square because tabs are, and not blank -- a transparent icon is invisible."""
     icon = script("make_favicon").build()
