@@ -49,9 +49,9 @@ SCALE = 2
 # still fits in memory.
 MAX_FRAMES = 400
 
-# The shape of the run clip, in game ticks at 60/s.
-ON_FOOT = 330     # 5.5s of ordinary play, which is what the clip is mostly for
-AFTER_DASH = 30   # half a second past the boost dropping, then cut
+# The shape of the clips, in game ticks at 60/s.
+DWELL = 30        # how long each menu option is held before moving on
+ON_FOOT = 330     # 5.5s of ordinary play, which is what the run clip is mostly for
 
 
 class Held(dict):
@@ -144,14 +144,20 @@ class Recorder:
 
 
 def menu_cycle(row: int, options: int, out: Path, seed=7):
-    """The select screen, stepping once through every option on one row."""
+    """The select screen, giving every option on one row an equal turn.
+
+    No press after the last one. Pressing back to the default would show it
+    twice a loop -- once at the top and again at the bottom -- which reads as a
+    stutter on the first option every time round. The GIF's own loop is what
+    returns to it.
+    """
     rec = Recorder(seed)
     rec.game.go_to_menu()
     rec.game.row = row
-    rec.step(24)  # rest on the first one long enough to be seen
-    for _ in range(options):
-        rec.game.menu_key(m.RIGHT_KEYS[0])
-        rec.step(30)
+    for i in range(options):
+        if i:
+            rec.game.menu_key(m.RIGHT_KEYS[0])
+        rec.step(DWELL)
     rec.save(out)
 
 
@@ -219,12 +225,13 @@ def a_run(out: Path, seed=2):
                 seen.add(id(ob))
                 smashed += 1
 
-    rec.until(lambda: (count(), not rec.game.dashing)[1], 700, "the dash never ended")
-
-    # Cut here rather than playing out the handover. Its three seconds of empty
-    # screen counting down are the right design in the game and dead air in a
-    # loop -- and the loop point is better on the dash than on nothing.
-    rec.step(AFTER_DASH)
+    # Cut the instant the dash starts winding down, which is where "GET READY"
+    # appears. Everything past that point is handover -- the warning, then three
+    # seconds of empty screen counting down -- and it is dead air in a loop.
+    rec.until(
+        lambda: (count(), rec.game.dash_left <= m.DASH_WARN_SECONDS)[1],
+        700, "the dash never reached its warning",
+    )
 
     if smashed < 4:
         raise RuntimeError(
