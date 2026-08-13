@@ -147,7 +147,7 @@ def gap_range(speed: float) -> tuple[float, float]:
     t = difficulty(speed)
     return tuple(
         early + (late - early) * t
-        for early, late in zip(GAP_RANGE_EARLY, GAP_RANGE_LATE)
+        for early, late in zip(GAP_RANGE_EARLY, GAP_RANGE_LATE, strict=True)
     )
 
 
@@ -335,7 +335,7 @@ class World:
         self.obstacles = [
             ob for ob in self.obstacles
             if ob.x + ob.w > -16.0 and ob.x < WIDTH + 20
-            and -20 < ob.y + ob.h and ob.y < HEIGHT + 20
+            and ob.y + ob.h > -20 and ob.y < HEIGHT + 20
         ]
 
         if self.quiet > 0.0:

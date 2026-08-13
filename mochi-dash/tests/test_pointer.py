@@ -9,7 +9,7 @@ import pytest
 
 import pygame
 
-from mochi_dash import characters, storage
+from mochi_dash import characters, pixelfont, storage
 from mochi_dash import main as m
 from mochi_dash import world as wd
 
@@ -155,6 +155,30 @@ def test_the_title_screen_can_reach_the_menu_without_a_keyboard(game):
     game.go_to_title()
     click(game, 150, 30)
     assert game.state == m.PLAYING, "pressing elsewhere should still start a run"
+
+
+@pytest.mark.parametrize("row", [38, 47, 56])
+def test_the_title_hint_lines_above_the_menu_one_start_a_run(game, row):
+    """The menu band must not reach up into the line above it.
+
+    It used to: written as `abs(y - row) <= PAD + GLYPH_H` it was twice as tall
+    as every other band and centred on the row rather than starting at it, so a
+    press on "S - DUCK" opened the menu instead of starting a run.
+    """
+    game.go_to_title()
+    click(game, 150, row)
+    assert game.state == m.PLAYING, f"y={row} was swallowed by the menu band"
+
+
+def test_every_pressable_line_uses_the_same_band(game):
+    """Four call sites, one rule -- which is how the odd one out was found."""
+    for row in (m.TITLE_MENU_ROW, m.OVER_MENU_ROW, game.HUD_ROW):
+        assert game.on_text_row(row, row), "the row itself must be inside"
+        assert game.on_text_row(row + pixelfont.GLYPH_H - 1, row)
+        assert not game.on_text_row(row - m.MENU_HIT_PAD - 1, row)
+        assert not game.on_text_row(row + pixelfont.GLYPH_H + m.MENU_HIT_PAD, row)
+    # And it stays clear of a neighbouring line at the title screen's pitch.
+    assert not game.on_text_row(m.TITLE_MENU_ROW - 9, m.TITLE_MENU_ROW)
 
 
 def test_the_title_and_the_banner_take_a_press(game):

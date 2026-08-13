@@ -63,3 +63,48 @@ The default is the terminal, which is the screen for the curses games: they hold
 it until they exit, because detaching one from its tty kills it. A backgrounded
 game's output goes to `~/Library/Logs/rabbithole/` on macOS and
 `$XDG_STATE_HOME/rabbithole/` (usually `~/.local/state`) elsewhere.
+
+## Letting Claude Code tell you when to play
+
+摸鱼也要摸得有提示。The point of the whole thing is the wait, so Claude Code can
+run the game for you: it nudges you when a turn is taking a while, and pauses the
+game the moment your attention is wanted back.
+
+Three hooks in `~/.claude/settings.json`, each pointing at a small script in
+`~/.claude/hooks/`:
+
+| hook | when it fires | what it does |
+|---|---|---|
+| `UserPromptSubmit` | you send a prompt | starts a 30-second timer, then says "still working — go play" |
+| `Stop` | Claude finishes | cancels the timer; pauses the game if it has focus |
+| `Notification` | Claude wants you | same, so a permission prompt is never left behind a game |
+
+```json
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      { "hooks": [{ "type": "command", "command": "~/.claude/hooks/mochi-turn-watch", "timeout": 5 }] }
+    ],
+    "Stop": [
+      { "hooks": [{ "type": "command", "command": "~/.claude/hooks/mochi-turn-done", "timeout": 5 }] }
+    ],
+    "Notification": [
+      { "hooks": [{ "type": "command", "command": "~/.claude/hooks/mochi-turn-done", "timeout": 5 }] }
+    ]
+  }
+}
+```
+
+Three things make it behave rather than get in the way:
+
+- **The timer runs detached.** Claude Code reads a hook's output until every
+  holder of the pipe is gone, so a plain background job would stall the turn for
+  the whole 30 seconds — the exact opposite of the point. `setsid` with stdout
+  closed is what keeps the turn moving.
+- **The pause is a toggle, so it is only ever sent to a focused game.** `P`
+  sent blind would just as happily unpause a game paused on purpose, and taking
+  focus from someone who is already working would be worse than staying quiet.
+- **Every failure is silent.** No display, no `xdotool`, driving it over SSH from
+  another machine — each just means one of the two channels (desktop
+  notification, tmux status line) is the live one. A convenience hook must never
+  be able to break a session.

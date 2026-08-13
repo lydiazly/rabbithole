@@ -214,7 +214,7 @@ DASH_MIX = 0.72  # how far the body tones are pulled towards the tint
 
 
 def _pull(color: Color, tint: Color, amount: float) -> Color:
-    return tuple(round(c + (t - c) * amount) for c, t in zip(color, tint))
+    return tuple(round(c + (t - c) * amount) for c, t in zip(color, tint, strict=True))
 
 
 def charged(look: Look, tint: Color) -> Look:

@@ -552,7 +552,7 @@ class Game:
             # The hint line that names the menu key doubles as the way there
             # without one. A phone has no keyboard at all, so without this the
             # character select is simply unreachable on the web build.
-            if abs(y - TITLE_MENU_ROW) <= MENU_HIT_PAD + pixelfont.GLYPH_H:
+            if self.on_text_row(y, TITLE_MENU_ROW):
                 self.go_to_menu()
             else:
                 self.start_run()
@@ -593,7 +593,7 @@ class Game:
             return
         for row in MENU_ROWS:
             top = self.MENU_TOP + row * self.MENU_PITCH
-            if not (top - MENU_HIT_PAD <= y < top + pixelfont.GLYPH_H + MENU_HIT_PAD):
+            if not self.on_text_row(y, top):
                 continue
             self.row = row
             # Left of the value means the "<" side of it, right means ">". The
@@ -871,18 +871,27 @@ class Game:
             x += (len(label) + HUD_BUTTON_GAP) * pixelfont.ADVANCE
         return line, spans
 
+    def on_text_row(self, y: float, row: int) -> bool:
+        """Whether a press landed on the line of text drawn at `row`.
+
+        One band for all of them, because they had drifted apart. The title
+        screen's was written as `abs(y - row) <= PAD + GLYPH_H`: twice as tall
+        as the others and centred on the row rather than starting at it, so it
+        reached up and swallowed the hint line above -- pressing "S - DUCK"
+        opened the menu instead of starting a run.
+        """
+        return row - MENU_HIT_PAD <= y < row + pixelfont.GLYPH_H + MENU_HIT_PAD
+
     def over_menu_hit(self, x: float, y: float) -> bool:
         """Whether a press landed on the game-over banner's menu button."""
         width = pixelfont.text_width(OVER_MENU_LABEL)
         left = (world.WIDTH - width) // 2
         return (left - MENU_HIT_PAD <= x < left + width + MENU_HIT_PAD
-                and OVER_MENU_ROW - MENU_HIT_PAD
-                <= y < OVER_MENU_ROW + pixelfont.GLYPH_H + MENU_HIT_PAD)
+                and self.on_text_row(y, OVER_MENU_ROW))
 
     def hud_button_at(self, x: float, y: float):
         """Which HUD hotkey a press landed on, if any."""
-        if not (self.HUD_ROW - MENU_HIT_PAD
-                <= y < self.HUD_ROW + pixelfont.GLYPH_H + MENU_HIT_PAD):
+        if not self.on_text_row(y, self.HUD_ROW):
             return None
         for action, left, width in self.hud_buttons()[1]:
             if left <= x < left + width:
