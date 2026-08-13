@@ -874,6 +874,61 @@ def test_the_dash_exit_needs_room_to_react():
     assert main.DASH_EXIT_CLEARANCE * wd.SPEED_MAX <= wd.WIDTH
 
 
+def test_losing_the_window_pauses_a_run_but_regaining_it_does_not_resume():
+    """Clicking away is not a decision to keep running; clicking back is not a
+    decision to be mid-jump.
+
+    Auto-resuming would drop the player into whatever arrived while they were
+    away, which is the same unavoidable death the dash handover exists to
+    prevent, so returning stays deliberate.
+    """
+    import os
+    os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
+    import pygame
+    pygame.init()
+    pygame.display.set_mode((1, 1))
+
+    class Held(dict):
+        def __getitem__(self, key):
+            return self.get(key, False)
+
+    real = pygame.key.get_pressed
+    pygame.key.get_pressed = lambda: Held()
+    try:
+        assert main.FOCUS_LOST_EVENTS, "no focus events available to listen for"
+        for event_type in main.FOCUS_LOST_EVENTS:
+            game = main.Game()
+            game.start_run()
+            assert not game.paused
+            pygame.event.clear()
+            pygame.event.post(pygame.event.Event(event_type))
+            game.handle_events()
+            assert game.paused, f"{event_type} did not pause the run"
+
+            # Coming back must not start the world moving again by itself.
+            pygame.event.clear()
+            focus_gained = getattr(pygame, "WINDOWFOCUSGAINED", None)
+            if focus_gained is not None:
+                pygame.event.post(pygame.event.Event(focus_gained))
+                game.handle_events()
+                assert game.paused, "regaining focus resumed the run on its own"
+
+            # And the world really is frozen while it lasts.
+            before = game.world.distance
+            game.update(main.DT)
+            assert game.world.distance == before
+
+        # Only a run can be paused: the menu and the title screen have no clock.
+        game = main.Game()
+        game.go_to_menu()
+        pygame.event.clear()
+        pygame.event.post(pygame.event.Event(main.FOCUS_LOST_EVENTS[0]))
+        game.handle_events()
+        assert not game.paused, "paused a screen that was not running"
+    finally:
+        pygame.key.get_pressed = real
+
+
 def test_the_end_of_a_dash_says_so_in_more_than_one_way():
     """Every other signal is a change in something, which is easy to miss.
 

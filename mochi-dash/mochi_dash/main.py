@@ -50,6 +50,17 @@ SOUND_CHOICES = ("ON", "OFF")
 
 JUMP_BUFFER = 0.12  # a press just before landing still counts
 
+# Losing the window pauses a run. Minimising is included because it does not
+# always come with a focus-lost event, and a run that carried on inside an
+# iconified window would be over by the time it was reopened. Read through
+# getattr so an older SDL that never defines them degrades to no auto-pause
+# rather than to an import-time crash.
+FOCUS_LOST_EVENTS = tuple(
+    event for event in
+    (getattr(pygame, name, None) for name in ("WINDOWFOCUSLOST", "WINDOWMINIMIZED"))
+    if event is not None
+)
+
 # The dash: a stretch of invincibility earned by clearing obstacles, during which
 # the world speeds up and anything in the way gets flattened instead of fatal.
 # Mario's starman, with the score standing in for the item box.
@@ -343,6 +354,15 @@ class Game:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 return False
+            # Clicking away mid-run is not a decision to keep running. Note what
+            # it does *not* do: resume on focus regained. Coming back to a window
+            # that is already moving drops the player into whatever arrived while
+            # they were gone, which is the same unavoidable death the dash
+            # handover exists to prevent. The overlay already says "P RESUME",
+            # so leaving is automatic and returning is deliberate.
+            if event.type in FOCUS_LOST_EVENTS and self.state == PLAYING:
+                self.paused = True
+                continue
             if event.type != pygame.KEYDOWN:
                 continue
             # Checked before anything else, so quitting works from every screen
