@@ -15,7 +15,7 @@ import sys
 
 import pygame
 
-from . import characters, effects, pixelfont, scenes, sfx, storage, world
+from . import characters, effects, pixelfont, scenes, sfx, sprites, storage, world
 from .palette import step_at
 from .player import HARD_LANDING, Player, idle_body_frame
 
@@ -66,6 +66,35 @@ MENU_ROWS = (CHARACTER_ROW, SCENE_ROW, SOUND_ROW)
 SOUND_CHOICES = ("ON", "OFF")
 
 JUMP_BUFFER = 0.12  # a press just before landing still counts
+
+# Pointer input: a mouse on a desktop, a finger on a phone opening the web build.
+#
+# Both are handled, and the doubling that would otherwise cause is why. SDL turns
+# a touch into a mouse event as well by default, so a phone delivers a tap twice;
+# the synthesised one is flagged, and skipping it leaves exactly one press per
+# press however the platform behaves. Handling only mouse events would be
+# shorter and would rely on that synthesis being on, which is not something this
+# code can check from here.
+#
+# Screen splits in two: press low to duck, press anywhere above to jump. That is
+# the whole scheme, because the game only ever asks for those two things, and
+# because "down" being at the bottom needs no explaining. Holding matters as much
+# as on the keyboard -- the jump is variable-height, so a tap is a hop and a held
+# press is the full arc.
+#
+# The line is the standing character's own crown, so the duck half is exactly the
+# character and the ground beneath it and the jump half is the sky. Derived
+# rather than picked: two thirds of the canvas happens to land on the same row
+# today, and would stop meaning anything the moment a pose changed height. The
+# ground band alone would be the tidier line to explain, and far too small a
+# target -- 24 canvas rows is about five millimetres of a phone held upright.
+POINTER_DUCK_FROM = world.GROUND_Y - sprites.POSE_SIZES["round"][1]
+
+# The menu is a list, so a press there lands on whichever row it is nearest and
+# on the arrow it is nearest, rather than meaning one global thing.
+MENU_HIT_PAD = 4          # canvas rows either side of a row's text
+MENU_START_FROM = 92      # below the list: the "SPACE START" line
+TITLE_MENU_ROW = 65       # the title screen's "M - MENU" line
 
 # Losing the window pauses a run. Minimising is included because it does not
 # always come with a focus-lost event, and a run that carried on inside an
@@ -251,6 +280,8 @@ class Game:
         self.recovery = 0.0
         self.freeze = 0
         self.shake = 0
+        self.pointer_jump = False
+        self.pointer_duck = False
         self.dashes_taken = 0
         self.state = MENU
 
@@ -287,6 +318,8 @@ class Game:
         self.recovery = 0.0
         self.freeze = 0
         self.shake = 0
+        self.pointer_jump = False
+        self.pointer_duck = False
         self.dashes_taken = 0
 
     def start_run(self) -> None:
@@ -394,6 +427,8 @@ class Game:
             if event.type in FOCUS_LOST_EVENTS and self.state == PLAYING:
                 self.paused = True
                 continue
+            if self.handle_pointer(event):
+                continue
             if event.type != pygame.KEYDOWN:
                 continue
             # Checked before anything else, so quitting works from every screen
@@ -419,6 +454,89 @@ class Game:
             elif self.state == GAME_OVER and self.over_timer >= GAME_OVER_LOCKOUT:
                 self.go_to_title()
         return True
+
+    # -- pointer ----------------------------------------------------------
+
+    def canvas_point(self, event):
+        """Where a pointer event landed, in canvas pixels, or None.
+
+        Touches arrive normalised to 0..1 and mouse events in window pixels, and
+        the two need different arithmetic to reach the same place. Normalised is
+        the easier of the two in a browser, where CSS decides how big the canvas
+        is drawn and the window size is no guide at all.
+        """
+        if event.type in (pygame.FINGERDOWN, pygame.FINGERUP):
+            return event.x * world.WIDTH, event.y * world.HEIGHT
+        width, height = self.screen.get_size()
+        if not width or not height:
+            return None
+        x, y = event.pos
+        return x * world.WIDTH / width, y * world.HEIGHT / height
+
+    def handle_pointer(self, event) -> bool:
+        """Returns whether the event was a pointer one, handled or not."""
+        down = event.type in (pygame.MOUSEBUTTONDOWN, pygame.FINGERDOWN)
+        up = event.type in (pygame.MOUSEBUTTONUP, pygame.FINGERUP)
+        if not (down or up):
+            return False
+        # The synthesised twin of a real touch. Dropped rather than acted on, so
+        # a phone gets one press per press.
+        if getattr(event, "touch", False):
+            return True
+        if up:
+            self.pointer_jump = False
+            self.pointer_duck = False
+            return True
+
+        point = self.canvas_point(event)
+        if point is None:
+            return True
+        x, y = point
+
+        if self.state == MENU:
+            self.menu_point(x, y)
+        elif self.state == TITLE:
+            # The hint line that names the menu key doubles as the way there
+            # without one. A phone has no keyboard at all, so without this the
+            # character select is simply unreachable on the web build.
+            if abs(y - TITLE_MENU_ROW) <= MENU_HIT_PAD + pixelfont.GLYPH_H:
+                self.go_to_menu()
+            else:
+                self.start_run()
+        elif self.state == GAME_OVER:
+            if self.over_timer >= GAME_OVER_LOCKOUT:
+                self.go_to_title()
+        elif self.state == PLAYING and not self.paused:
+            if y >= POINTER_DUCK_FROM:
+                self.pointer_duck = True
+            else:
+                self.pointer_jump = True
+                self.jump_buffer = JUMP_BUFFER
+        return True
+
+    def menu_point(self, x: float, y: float) -> None:
+        """A press on the select screen: pick a row, an arrow, or start."""
+        if y >= MENU_START_FROM:
+            self.menu_key(CONFIRM_KEYS[0])
+            return
+        for row in MENU_ROWS:
+            top = self.MENU_TOP + row * self.MENU_PITCH
+            if not (top - MENU_HIT_PAD <= y < top + pixelfont.GLYPH_H + MENU_HIT_PAD):
+                continue
+            self.row = row
+            # Left of the value means the "<" side of it, right means ">". The
+            # midpoint is the value's own centre, so the arrows are what the
+            # player is aiming at either way.
+            printed = f"< {self.row_value(row)} >"
+            middle = self.MENU_VALUE_X + pixelfont.text_width(printed) / 2
+            if x >= self.MENU_LABEL_X:
+                self.menu_key(RIGHT_KEYS[0] if x >= middle else LEFT_KEYS[0])
+            return
+
+    def row_value(self, row: int) -> str:
+        """The option under the cursor on that row, spelled as it is printed."""
+        option = self.row_options(row)[self.picks[row]]
+        return option if isinstance(option, str) else option.name
 
     def row_options(self, row: int):
         return {
@@ -482,8 +600,8 @@ class Game:
             return
 
         keys = pygame.key.get_pressed()
-        holding_jump = any(keys[k] for k in JUMP_KEYS)
-        ducking = any(keys[k] for k in DUCK_KEYS)
+        holding_jump = any(keys[k] for k in JUMP_KEYS) or self.pointer_jump
+        ducking = any(keys[k] for k in DUCK_KEYS) or self.pointer_duck
         lateral = any(keys[k] for k in RIGHT_KEYS) - any(keys[k] for k in LEFT_KEYS)
 
         self.jump_buffer = max(0.0, self.jump_buffer - dt)
@@ -695,7 +813,7 @@ class Game:
             self.text("SPACE OR W - JUMP", 38, ink, halo)
             self.text("JUMP AGAIN IN AIR TO DOUBLE", 47, ink, halo)
             self.text("S - DUCK   A/D - SHIFT", 56, ink, halo)
-            self.text(hotkey_line(), 65, ink, halo)
+            self.text(hotkey_line(), TITLE_MENU_ROW, ink, halo)
         elif self.state == GAME_OVER:
             self.text("GAME OVER", 30, ink, halo, 2)
             self.text(f"SCORE {self.score:04d}", 50, ink, halo)
@@ -765,12 +883,8 @@ class Game:
     def draw_menu(self, step, ink, halo) -> None:
         self.text("MOCHI DASH", 16, ink, halo, 2)
 
-        rows = (
-            ("CHARACTER", self.previewed_character.name),
-            ("SCENE", self.previewed_scene.name),
-            ("SOUND", SOUND_CHOICES[self.picks[SOUND_ROW]]),
-        )
-        for i, (label, value) in enumerate(rows):
+        for i, label in enumerate(("CHARACTER", "SCENE", "SOUND")):
+            value = self.row_value(i)
             y = self.MENU_TOP + i * self.MENU_PITCH
             if i == self.row:
                 self.draw_cursor(self.MENU_LABEL_X - 10, y, ink)

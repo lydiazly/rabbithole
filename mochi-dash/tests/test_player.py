@@ -746,21 +746,60 @@ def test_no_character_hides_much_air_inside_the_shared_box(character):
     assert empty / cells < 0.05, (character.key, empty, cells)
 
 
+@pytest.mark.parametrize("character", characters.CHARACTERS, ids=lambda c: c.key)
+def test_every_pose_is_fully_outlined(character):
+    """No body pixel may touch transparency directly.
+
+    The outline is what separates a character from whatever it is standing in
+    front of, and a gap in it reads as a nick taken out of the silhouette. They
+    were all of one kind: the crown's outline run stopping a pixel short of the
+    body beneath it, so the shoulders leaked upward. Jojo's idle pose was where
+    it showed, because that is the one on screen most of the time, but every
+    character had it somewhere.
+    """
+    fill = set("#o*%")
+    for name, rows in character.poses.items():
+        height, width = len(rows), len(rows[0])
+        for y, row in enumerate(rows):
+            for x, char in enumerate(row):
+                if char not in fill:
+                    continue
+                for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+                    nx, ny = x + dx, y + dy
+                    outside = not (0 <= nx < width and 0 <= ny < height)
+                    assert not outside and rows[ny][nx] != ".", (
+                        f"{character.key} {name}: body pixel at ({x},{y}) is "
+                        f"open to the {'edge' if outside else 'transparent'} "
+                        f"side"
+                    )
+
+
 def face_marks(rows):
     """Outline pixels sitting inside the fill, i.e. eyes, noses and mouths.
 
-    An outline pixel is part of the silhouette when a neighbour is transparent
-    or when both neighbours are outline too, as along the crown and the base. A
-    face mark is one with fill beside it.
+    An outline pixel belongs to the silhouette when it touches transparency in
+    any direction, or when both horizontal neighbours are outline too, as along
+    the crown and the base. A face mark is one with fill beside it.
+
+    Transparency was originally only checked left and right, which held while
+    the crown was a single pixel thick. Closing the outline made the shoulders
+    two thick, and the inner one of the pair touches transparency only from
+    above -- so a purely horizontal test read it as an eye.
     """
     marks = set()
+    height, width = len(rows), len(rows[0])
     for y, row in enumerate(rows):
         for x, char in enumerate(row):
-            if char != "@" or x == 0 or x == len(row) - 1:
+            if char != "@" or x == 0 or x == width - 1:
+                continue
+            touches_air = any(
+                not (0 <= x + dx < width and 0 <= y + dy < height)
+                or rows[y + dy][x + dx] == "."
+                for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1))
+            )
+            if touches_air:
                 continue
             left, right = row[x - 1], row[x + 1]
-            if "." in (left, right):
-                continue
             if left != "@" or right != "@":
                 marks.add((x, y))
     return marks

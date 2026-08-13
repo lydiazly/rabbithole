@@ -223,5 +223,6 @@ __marimo__/
 # Mochi Dash runtime state
 # ---------------------------------------------------------------------------
 
-# Written beside the package whenever a run beats the stored best.
+# The high score now lives in the platform's per-user data directory. This is
+# only the pre-move location, left ignored so an existing checkout stays clean.
 .highscore

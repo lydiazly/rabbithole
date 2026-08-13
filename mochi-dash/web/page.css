@@ -39,6 +39,12 @@ body {
     height: 100%;
     overflow: hidden; /* the canvas is absolutely positioned; nothing scrolls */
     font-family: ui-monospace, "DejaVu Sans Mono", monospace;
+
+    /* Also on the page, not just the canvas: a swipe that starts on the canvas
+       can still be handed to the document once it leaves it, and pull-to-refresh
+       fires from a downward drag anywhere. */
+    overscroll-behavior: none;
+    touch-action: none;
 }
 
 /* Capped at the desktop window's size and centred. Auto width and height let
@@ -53,6 +59,16 @@ canvas.emscripten {
     max-height: min(var(--game-height), 100vh) !important;
     margin: auto; /* with the template's inset-0, centres on both axes */
     image-rendering: pixelated; /* scaled down, the art must not go soft */
+
+    /* On a phone every one of these is the difference between a control and a
+       browser gesture. Without touch-action the tap that should duck scrolls the
+       page and a quick double-tap zooms it; without the tap highlight removed
+       each jump flashes a grey box over the canvas; without user-select a held
+       press starts selecting the page. */
+    touch-action: none;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+    -webkit-user-select: none;
 }
 
 /* The loader's message: "Loading, please wait" and, on a fresh tab, "please
