@@ -108,6 +108,13 @@ TITLE_MENU_ROW = 65       # the title screen's "M - MENU" line
 HUD_BUTTONS = (("P PAUSE", "pause"), ("R RETRY", "retry"), ("M MENU", "menu"))
 HUD_BUTTON_GAP = 2  # spaces between them
 
+# The banner's own menu button. Any press there already means "carry on", so
+# without a target of its own the menu would be two screens away from the one
+# place a run actually ends -- which on a phone is where you go to change
+# character, and the only reason to leave the title screen at all.
+OVER_MENU_LABEL = "M MENU"
+OVER_MENU_ROW = 74
+
 # Losing the window pauses a run. Minimising is included because it does not
 # always come with a focus-lost event, and a run that carried on inside an
 # iconified window would be over by the time it was reopened. Read through
@@ -550,7 +557,12 @@ class Game:
             else:
                 self.start_run()
         elif self.state == GAME_OVER and self.over_timer >= GAME_OVER_LOCKOUT:
-            self.go_to_title()
+            # Checked before the catch-all, which is every other pixel of this
+            # screen and means "carry on".
+            if self.over_menu_hit(x, y):
+                self.go_to_menu()
+            else:
+                self.go_to_title()
         return True
 
     def press_in_play(self, event, mouse: bool, y: float) -> None:
@@ -859,6 +871,14 @@ class Game:
             x += (len(label) + HUD_BUTTON_GAP) * pixelfont.ADVANCE
         return line, spans
 
+    def over_menu_hit(self, x: float, y: float) -> bool:
+        """Whether a press landed on the game-over banner's menu button."""
+        width = pixelfont.text_width(OVER_MENU_LABEL)
+        left = (world.WIDTH - width) // 2
+        return (left - MENU_HIT_PAD <= x < left + width + MENU_HIT_PAD
+                and OVER_MENU_ROW - MENU_HIT_PAD
+                <= y < OVER_MENU_ROW + pixelfont.GLYPH_H + MENU_HIT_PAD)
+
     def hud_button_at(self, x: float, y: float):
         """Which HUD hotkey a press landed on, if any."""
         if not (self.HUD_ROW - MENU_HIT_PAD
@@ -912,6 +932,7 @@ class Game:
             self.text(f"SCORE {self.score:04d}", 50, ink, halo)
             if self.over_timer >= GAME_OVER_LOCKOUT:
                 self.text("ANY KEY TO CONTINUE", 62, ink, halo)
+                self.text(OVER_MENU_LABEL, OVER_MENU_ROW, ink, halo)
 
     # A plain list with a cursor, in the shape every pixel-era option screen
     # used. The chosen character stands below it in the chosen scene, so the

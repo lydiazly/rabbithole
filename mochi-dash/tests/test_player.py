@@ -104,6 +104,7 @@ UI_LINES = [
     ("GAME OVER", 2),
     ("SCORE 00000", 1),
     ("ANY KEY TO CONTINUE", 1),
+    ("M MENU", 1),
     ("P PAUSE  R RETRY  M MENU", 1),
     ("SMASH THROUGH", 1),
     ("GET READY", 1),

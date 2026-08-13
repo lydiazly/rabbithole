@@ -248,6 +248,32 @@ def test_the_menu_is_reachable_while_paused(game):
     assert game.state == m.MENU
 
 
+def test_the_game_over_banner_has_its_own_way_to_the_menu(game):
+    """Every other pixel of that screen means "carry on", so the menu needed a
+    target of its own -- it is where you go to change character, and a run
+    ending is when you would want to.
+    """
+    game.start_run()
+    game.end_run()
+    game.over_timer = m.GAME_OVER_LOCKOUT
+    click(game, wd.WIDTH // 2, m.OVER_MENU_ROW + 2)
+    assert game.state == m.MENU
+
+    game.start_run()
+    game.end_run()
+    game.over_timer = m.GAME_OVER_LOCKOUT
+    click(game, wd.WIDTH // 2, 40)
+    assert game.state == m.TITLE, "pressing elsewhere should still carry on"
+
+
+def test_the_game_over_menu_button_is_inside_the_lockout_too(game):
+    """The press that killed you is often still coming."""
+    game.start_run()
+    game.end_run()
+    click(game, wd.WIDTH // 2, m.OVER_MENU_ROW + 2)
+    assert game.state == m.GAME_OVER
+
+
 def test_a_press_does_nothing_else_while_paused(game):
     game.start_run()
     game.paused = True
