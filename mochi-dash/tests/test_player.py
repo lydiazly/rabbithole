@@ -814,8 +814,6 @@ def test_a_dash_never_expires_into_the_obstacle_it_is_touching():
 
     Swept across a whole frame of travel, because the bug lives inside one.
     """
-    import os
-    os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
     import pygame
     pygame.init()
     pygame.display.set_mode((1, 1))
@@ -882,8 +880,6 @@ def test_losing_the_window_pauses_a_run_but_regaining_it_does_not_resume():
     away, which is the same unavoidable death the dash handover exists to
     prevent, so returning stays deliberate.
     """
-    import os
-    os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
     import pygame
     pygame.init()
     pygame.display.set_mode((1, 1))
@@ -992,8 +988,6 @@ def test_hit_stop_holds_the_world_still_without_stacking():
     """
     assert main.SMASH_FREEZE / 60 < 0.1, "long enough to read as a stutter"
 
-    import os
-    os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
     import pygame
     pygame.init()
     pygame.display.set_mode((1, 1))
@@ -1033,8 +1027,6 @@ def test_hit_stop_holds_the_world_still_without_stacking():
 
 def test_a_smashed_flyer_puffs_where_it_was_hit():
     """Not on the ground a body-length below it, which is where it used to."""
-    import os
-    os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
     import pygame
     pygame.init()
     pygame.display.set_mode((1, 1))
@@ -1072,8 +1064,6 @@ def test_jumping_during_a_dash_costs_nothing():
     If that were ever not true, a player jumping out of habit would be quietly
     penalised for it and disabling the jump would start to look justified.
     """
-    import os
-    os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
     import pygame
     pygame.init()
     pygame.display.set_mode((1, 1))
@@ -1116,8 +1106,6 @@ def test_dying_does_not_sound_like_a_dash_ending():
     power-down over the death sound and armed a breather for a run that had
     already finished.
     """
-    import os
-    os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
     import pygame
     pygame.init()
     pygame.display.set_mode((1, 1))
@@ -1143,8 +1131,6 @@ def test_each_dash_costs_more_than_the_one_before():
     against the current price, not the first one, or it fills to full and then
     keeps going while nothing happens.
     """
-    import os
-    os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
     import pygame
     pygame.init()
     pygame.display.set_mode((1, 1))
@@ -1208,9 +1194,6 @@ def test_pausing_freezes_the_run_and_only_the_run(monkeypatch):
     The dash timer and the cooldown both run off the same update, so a pause
     that only skipped the world would quietly burn the dash while nothing moved.
     """
-    import os
-    os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
-    os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
     import pygame
 
     pygame.init()

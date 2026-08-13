@@ -1,0 +1,63 @@
+# Checks that run on every push and every pull request.
+#
+# Kept separate from pages.yml, which only runs on main and whose job is to
+# publish. This one's job is to fail: it runs on branches and PRs, where a
+# failure is still cheap to act on, and it covers the two games that pages.yml
+# has no reason to touch.
+name: ci
+
+on:
+  push:
+  pull_request:
+
+# A superseded run on the same branch is worth nothing, so let a new push
+# cancel it. The opposite of pages.yml, where a half-finished deploy is worse
+# than a slow one.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Test mochi-dash
+        run: uv run --directory mochi-dash python -m pytest -q
+
+      # Snake and Breakout have no tests -- they are small curses programs and
+      # nobody has written any. This is the floor under that: it imports each
+      # game and resolves the entry point its pyproject declares, which is
+      # exactly what `./play` does to start it. A syntax error, a bad import or
+      # a renamed `main` would otherwise reach a player before anyone noticed,
+      # because nothing else in CI opens these files at all.
+      - name: Every game can still be started
+        run: |
+          for manifest in */pyproject.toml; do
+            dir=${manifest%/pyproject.toml}
+            echo "$dir"
+            uv run --directory "$dir" python - <<'PY'
+          import importlib
+          import pathlib
+          import tomllib
+
+          spec = tomllib.loads(pathlib.Path("pyproject.toml").read_text())
+          scripts = spec.get("project", {}).get("scripts") or {}
+          assert scripts, "declares no [project.scripts], so ./play cannot start it"
+          for name, target in scripts.items():
+              module, _, attr = target.partition(":")
+              entry = getattr(importlib.import_module(module), attr)
+              assert callable(entry), f"{target} is not callable"
+              print(f"  ok: {name} -> {target}")
+          PY
+          done
+
+      # The launcher is the only shell in the repo and the only thing every game
+      # is started through. shellcheck has already caught a real bug in it: a
+      # nested `cd "$(cd ... && pwd)"` that silently succeeds against the wrong
+      # directory when the inner command fails, because `cd ""` returns 0 and
+      # `set -e` therefore sees nothing wrong.
+      - name: Shellcheck the launcher
+        run: uvx --from shellcheck-py shellcheck -o all play

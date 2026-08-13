@@ -382,7 +382,7 @@ def test_a_launched_obstacle_stops_being_dangerous():
     assert w.hits(box), "should be a hit before it is launched"
     w.launch(ob)
     assert not w.hits(box)
-    assert w.collides(box) is False
+    assert w.hits(box) == []
     start_y = ob.y
     for _ in range(20):
         w.update(DT, PLAYER_X)

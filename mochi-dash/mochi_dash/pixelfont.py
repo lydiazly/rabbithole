@@ -112,8 +112,3 @@ def draw(surface, text: str, x: int, y: int, color, scale: int = 1) -> None:
     color = tuple(color)
     for i, char in enumerate(text.upper()):
         surface.blit(_glyph(char, color, scale), (x + i * ADVANCE * scale, y))
-
-
-def draw_centered(surface, text: str, canvas_w: int, y: int, color,
-                  scale: int = 1) -> None:
-    draw(surface, text, (canvas_w - text_width(text, scale)) // 2, y, color, scale)

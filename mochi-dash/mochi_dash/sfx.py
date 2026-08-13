@@ -11,7 +11,6 @@ because it could not open a mixer would be worse than one that runs quietly.
 """
 
 import array
-import math
 
 import pygame
 

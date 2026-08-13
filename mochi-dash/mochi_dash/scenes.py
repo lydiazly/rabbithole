@@ -49,7 +49,7 @@ class Scene:
             # A typo here would silently switch a layer off rather than fail, and
             # the scene would just quietly be missing its hills.
             raise ValueError(f"{self.key}: unknown layers {sorted(unknown)}")
-        for kind, rows in self.ground.items():
+        for rows in self.ground.values():
             sprites.validate(rows)
         for rows in self.flyer:
             sprites.validate(rows)
@@ -151,13 +151,6 @@ SNOW = Scene(
 
 SCENES = (DESERT, SNOW)
 DEFAULT = DESERT
-
-
-def by_key(key: str) -> Scene:
-    for scene in SCENES:
-        if scene.key == key:
-            return scene
-    return DEFAULT
 
 
 def palette_for_step(scene: Scene, step: int) -> Palette:

@@ -177,13 +177,6 @@ CHARACTERS = (MOMO, COCO, JOJO, BOBO)
 DEFAULT = MOMO
 
 
-def by_key(key: str) -> Character:
-    for character in CHARACTERS:
-        if character.key == key:
-            return character
-    return DEFAULT
-
-
 def look_for_step(character: Character, step: int) -> Look:
     """The character's colours at a quantised day/night step."""
     return blend(character.day, character.night, step)

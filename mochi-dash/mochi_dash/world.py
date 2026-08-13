@@ -172,8 +172,6 @@ SMALL_BOX = (3, 11)
 LARGE_BOX = (5, 16)
 CLUSTER_GAP = 8
 
-# Canvas units per full day/night cycle: about 30 s of play at top speed, 75 s at
-# the opening crawl. Much shorter and the sky starts visibly strobing.
 # Pixels of travel in a full day and night. Long enough that the sky is the slow
 # rhythm and the dash is the fast one: at 6500 a cycle settled at 32 seconds
 # against a dash every 17, near enough the same tempo that the two events kept
@@ -407,9 +405,6 @@ class World:
             ob for ob in self.obstacles
             if not ob.launched and player_mod.rects_overlap(box, ob.rect())
         ]
-
-    def collides(self, box) -> bool:
-        return bool(self.hits(box))
 
     def launch(self, ob: Obstacle) -> None:
         """Knock an obstacle out of the way, mid-dash."""
