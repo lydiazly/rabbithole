@@ -100,6 +100,12 @@ Three hooks in `~/.claude/settings.json`, each pointing at a small script in
 }
 ```
 
+The nudge names a key to press, and nothing above binds it: point a custom
+shortcut — GNOME keeps them in Settings › Keyboard — at `play mochi-dash`, by
+its full path. `Super+G` is the key the nudge names unless `MOCHI_HOTKEY` says
+otherwise, so set that, in the environment Claude Code starts from, for any
+other choice. Naming the wrong key is worse than naming none.
+
 Four things make it behave rather than get in the way:
 
 - **The timer runs detached.** Claude Code reads a hook's output until every
