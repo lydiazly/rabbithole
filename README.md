@@ -100,12 +100,16 @@ Three hooks in `~/.claude/settings.json`, each pointing at a small script in
 }
 ```
 
-Three things make it behave rather than get in the way:
+Four things make it behave rather than get in the way:
 
 - **The timer runs detached.** Claude Code reads a hook's output until every
   holder of the pipe is gone, so a plain background job would stall the turn for
   the whole 30 seconds — the exact opposite of the point. `setsid` with stdout
   closed is what keeps the turn moving.
+- **Every notification is transient.** Each one is true only for a moment — a
+  turn running long, a turn that has stopped — so none is filed in the desktop's
+  notification list. Without that, an afternoon of work greets whoever unlocks
+  the screen with one stale banner per long turn.
 - **The pause is a toggle, so it is only ever sent to a focused game.** `P`
   sent blind would just as happily unpause a game paused on purpose, and taking
   focus from someone who is already working would be worse than staying quiet.
