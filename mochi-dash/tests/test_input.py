@@ -51,6 +51,47 @@ def test_quit_works_from_every_screen(game):
     assert game.handle_events() is False
 
 
+def test_a_browser_build_binds_no_quit_key():
+    """Quitting is a desktop idea and there is no browser equivalent to bind.
+
+    Checked through the helper rather than the constant because a desktop test
+    run never takes that branch, and a binding that only exists under emscripten
+    is one nothing else in the suite would notice going wrong.
+    """
+    assert m.quit_keys_for(browser=True) == ()
+    assert m.quit_keys_for(browser=False) == (pygame.K_ESCAPE, pygame.K_q)
+
+
+def test_with_no_quit_key_bound_those_keys_leave_the_loop_running(game, monkeypatch):
+    """The point of unbinding them: the loop must not end, on any screen.
+
+    Returning from the loop in a browser runs pygame.quit() and then stops
+    driving the canvas, on a page that cannot close its own tab -- a dead
+    picture and no way back except a reload.
+    """
+    monkeypatch.setattr(m, "QUIT_KEYS", ())
+    for enter in (game.go_to_menu, game.go_to_title, game.start_run, game.end_run):
+        enter()
+        for key in (pygame.K_ESCAPE, pygame.K_q):
+            assert press(game, key) is True, (enter.__name__, key)
+
+
+def test_the_title_screen_offers_no_quit_it_cannot_honour(monkeypatch):
+    """The hint line is built from the bindings, so the two cannot drift."""
+    assert "Q - QUIT" in m.hotkey_line()
+    monkeypatch.setattr(m, "QUIT_KEYS", ())
+    assert "QUIT" not in m.hotkey_line()
+    assert "M - MENU" in m.hotkey_line()
+
+
+def test_the_window_closing_still_ends_the_game_without_a_quit_key(game, monkeypatch):
+    """Unbinding the key must not disarm the window's own close button."""
+    monkeypatch.setattr(m, "QUIT_KEYS", ())
+    pygame.event.clear()
+    pygame.event.post(pygame.event.Event(pygame.QUIT))
+    assert game.handle_events() is False
+
+
 def test_the_menu_key_returns_from_anywhere_except_the_menu(game):
     for enter in (game.go_to_title, game.start_run, game.end_run):
         enter()

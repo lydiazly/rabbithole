@@ -27,13 +27,30 @@ START_X = 42.0
 X_MIN = 22.0
 X_MAX = 110.0
 
+
+def quit_keys_for(browser: bool) -> tuple:
+    """The keys that end the game, which in a browser is none of them.
+
+    Quitting is a desktop idea: the loop returns, the process ends, and the
+    window goes with it. A page has neither half of that. pygbag replaces
+    asyncio.run with one that schedules the loop as a task on the page's own
+    event loop and returns, so a loop that ends runs pygame.quit() and then
+    simply stops driving the canvas -- and a page cannot close a tab it did not
+    open. The player would be left looking at a dead picture with no way back
+    except a reload, which is worse than the key not being there at all.
+    """
+    return () if browser else (pygame.K_ESCAPE, pygame.K_q)
+
+
 JUMP_KEYS = (pygame.K_SPACE, pygame.K_UP, pygame.K_w, pygame.K_RETURN)
 # On the select screen up/down change row, so only these confirm a choice.
 CONFIRM_KEYS = (pygame.K_SPACE, pygame.K_RETURN)
 DUCK_KEYS = (pygame.K_DOWN, pygame.K_s)
 LEFT_KEYS = (pygame.K_LEFT, pygame.K_a)
 RIGHT_KEYS = (pygame.K_RIGHT, pygame.K_d)
-QUIT_KEYS = (pygame.K_ESCAPE, pygame.K_q)
+# storage owns the emscripten check because it needed it first, and its note on
+# why sys.platform is the right probe belongs with it rather than duplicated.
+QUIT_KEYS = quit_keys_for(storage.BROWSER)
 RESTART_KEYS = (pygame.K_r,)
 MENU_KEYS = (pygame.K_m,)
 PAUSE_KEYS = (pygame.K_p,)
@@ -180,6 +197,20 @@ MENU = "menu"
 TITLE = "title"
 PLAYING = "playing"
 GAME_OVER = "over"
+
+
+def hotkey_line() -> str:
+    """The title screen's bottom row.
+
+    Built from the bindings rather than written out, so the screen cannot go on
+    offering a key after the key has gone. In a browser that is exactly what
+    would happen: no quit is bound there, and a prompt for one is a promise the
+    game has no way to keep.
+    """
+    hints = ["M - MENU"]
+    if QUIT_KEYS:
+        hints.append("Q - QUIT")
+    return "   ".join(hints)
 
 
 def pulse_scale(elapsed: float, scales=PROMPT_SCALES) -> int:
@@ -664,7 +695,7 @@ class Game:
             self.text("SPACE OR W - JUMP", 38, ink, halo)
             self.text("JUMP AGAIN IN AIR TO DOUBLE", 47, ink, halo)
             self.text("S - DUCK   A/D - SHIFT", 56, ink, halo)
-            self.text("M - MENU   Q - QUIT", 65, ink, halo)
+            self.text(hotkey_line(), 65, ink, halo)
         elif self.state == GAME_OVER:
             self.text("GAME OVER", 30, ink, halo, 2)
             self.text(f"SCORE {self.score:04d}", 50, ink, halo)
