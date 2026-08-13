@@ -23,6 +23,3 @@ build-backend = "hatchling.build"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-# A ROS install on PYTHONPATH leaks its pytest plugins into this venv, and they
-# crash on collection. Nothing here uses them. Harmless where ROS is absent.
-addopts = "-p no:launch_testing -p no:launch_ros"
