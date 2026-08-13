@@ -190,11 +190,70 @@ def test_only_the_left_button_works_the_menus(game):
     assert game.state == m.TITLE
 
 
-def test_a_press_does_nothing_while_paused(game):
+def hud_button(game, action):
+    """The centre of one of the HUD hotkey buttons, in canvas pixels."""
+    for name, left, width in game.hud_buttons()[1]:
+        if name == action:
+            return left + width / 2, game.HUD_ROW + 2
+    raise AssertionError(f"no {action} button")
+
+
+@pytest.mark.parametrize("action", [a for _, a in m.HUD_BUTTONS])
+def test_every_hotkey_on_the_hud_is_pressable(game, action):
+    """With no keyboard this row is the only way to pause, retry or get out.
+
+    The labels are drawn from the same layout that decides what a press hits, so
+    the thing named is the thing that happens -- but only if both sides really
+    do come from that one place, which is what this checks by pressing the
+    middle of each label in turn.
+    """
+    game.start_run()
+    game.score = 42
+    click(game, *hud_button(game, action))
+    if action == "pause":
+        assert game.paused
+    elif action == "menu":
+        assert game.state == m.MENU
+    elif action == "retry":
+        assert game.state == m.PLAYING and game.score == 0
+    else:
+        raise AssertionError(f"untested action {action}")
+
+
+def test_the_hud_buttons_do_not_overlap_or_leave_the_canvas(game):
+    spans = game.hud_buttons()[1]
+    for (_, left, width), (_, next_left, _) in zip(spans, spans[1:]):
+        assert left + width < next_left, "two buttons share pixels"
+    action, left, width = spans[-1]
+    assert left + width <= wd.WIDTH, (action, left + width)
+    assert spans[0][1] > 0
+
+
+def test_pausing_and_resuming_by_press(game):
+    """The overlay names a key, and a phone has none."""
+    game.start_run()
+    click(game, *hud_button(game, "pause"))
+    assert game.paused
+
+    click(game, 150, 40)
+    assert not game.paused, "a press did not resume"
+    assert game.jump_buffer == 0.0, "the press that resumed also jumped"
+
+
+def test_the_menu_is_reachable_while_paused(game):
+    """Otherwise pausing on a phone is a corner with no way out of it."""
     game.start_run()
     game.paused = True
-    click(game, 150, 20)
+    click(game, *hud_button(game, "menu"))
+    assert game.state == m.MENU
+
+
+def test_a_press_does_nothing_else_while_paused(game):
+    game.start_run()
+    game.paused = True
+    click(game, 150, 20, button=m.MOUSE_DUCK_BUTTON)
     assert game.jump_buffer == 0.0 and not game.pointer_jump
+    assert not game.pointer_duck
 
 
 def test_the_menu_picks_the_row_and_the_arrow_under_the_press(game):

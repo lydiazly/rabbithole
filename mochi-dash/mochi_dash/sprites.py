@@ -713,17 +713,23 @@ EAR_SINK = 1
 # A single centred tuft rather than a mirrored pair, which is why `Accessory`
 # takes a placement at all. Two pixels wide so it centres exactly: every pose is
 # an even number of pixels across.
+# Five rows with two of them sunk into the head, so three stand up above the
+# crown exactly as before and the root shows on the forehead. The two lower rows
+# are the same in both frames on purpose: hair attached to a head does not move
+# at the root, so the tip is what sways.
 TUFT = (
     (  # leaning right
-        "..@.",
-        ".@#.",
-        "@##.",
+        "..@@",
+        ".@#@",
+        "@##@",
+        "@##@",
         "@@@@",
     ),
     (  # leaning left
-        ".@..",
-        ".#@.",
-        ".##@",
+        "@@..",
+        "@#@.",
+        "@##@",
+        "@##@",
         "@@@@",
     ),
 )
@@ -820,7 +826,7 @@ def _span(row) -> tuple[int, int]:
 
 
 class Accessory:
-    """Art drawn behind the head on both sides, with its own idle cycle.
+    """Art drawn with the head, on both sides of it, with its own idle cycle.
 
     Ears are the only one so far. It is a type rather than a flag on the
     character so that the next one — horns, a cap, whatever — is art plus a
@@ -831,7 +837,8 @@ class Accessory:
     follow it.
     """
 
-    def __init__(self, frames, idle, sink: int = 1, paired: bool = True):
+    def __init__(self, frames, idle, sink: int = 1, paired: bool = True,
+                 in_front: bool = False):
         if not frames:
             raise ValueError("an accessory needs at least one frame")
         sizes = set()
@@ -847,6 +854,11 @@ class Accessory:
         self.idle = tuple(idle)
         self.sink = sink
         self.paired = paired
+        # Behind by default, so an ear's base disappears into the head instead
+        # of being drawn across it. A crest that is meant to reach down onto the
+        # forehead needs the opposite, and only the drawing order decides it:
+        # sunk any further while still behind, it simply vanishes.
+        self.in_front = in_front
         self.width, self.height = sizes.pop()
         self.cycle = sum(ticks for _, ticks in self.idle)
 
@@ -902,7 +914,7 @@ class Accessory:
 
 EARS = Accessory(EAR_LEFT, EAR_IDLE, sink=EAR_SINK)
 SHIBA_EARS = Accessory(SHIBA_EAR_LEFT, EAR_IDLE, sink=EAR_SINK)
-CREST = Accessory(TUFT, TUFT_IDLE, sink=1, paired=False)
+CREST = Accessory(TUFT, TUFT_IDLE, sink=2, paired=False, in_front=True)
 
 
 class CharacterSheet:

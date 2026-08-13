@@ -105,6 +105,27 @@ launch_mode() {
     ' "$1/pyproject.toml"
 }
 
+# Where a backgrounded game's output goes.
+#
+# /tmp was the obvious answer and the wrong one on two counts: on Linux it is
+# shared, so two accounts running the same game collide on one filename, and it
+# is cleared on reboot, which is exactly when you would want to read why last
+# night's launch failed. Each platform has a place for this, and the game's own
+# high score already goes to the matching one.
+log_path() {
+    local dir=$1 base
+    case $(uname -s) in
+        Darwin) base=$HOME/Library/Logs/rabbithole ;;
+        *) base=${XDG_STATE_HOME:-$HOME/.local/state}/rabbithole ;;
+    esac
+    # A read-only or missing home is not worth refusing to play over, so fall
+    # back to the old location rather than failing the launch.
+    if ! mkdir -p "$base" 2>/dev/null; then
+        base=${TMPDIR:-/tmp}
+    fi
+    printf '%s/%s.log' "$base" "$dir"
+}
+
 launch() {
     local dir=$1 entry mode log pid
     entry=$(entry_point "$dir")
@@ -132,7 +153,7 @@ launch() {
     # way, and nohup keeps a closing terminal's SIGHUP off it. stdin has to go
     # somewhere other than the terminal, or reading it would stop the game with
     # SIGTTIN. Output goes to a log rather than over a live prompt.
-    log=${TMPDIR:-/tmp}/rabbithole-$dir.log
+    log=$(log_path "$dir")
     nohup uv run --no-sync "$entry" </dev/null >"$log" 2>&1 &
     pid=$!
 

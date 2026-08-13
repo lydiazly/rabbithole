@@ -1,7 +1,25 @@
 # rabbithole
 
-Small games. Each is a self-contained [uv](https://docs.astral.sh/uv/) project in
-its own directory.
+**摸鱼小游戏。** 等待 AI agent 的过程中轻松一下。
+
+**Games for slacking off.** Something to do while an AI agent is thinking.
+
+![Mochi Dash](mochi-dash.png)
+
+推荐 **[mochi-dash](mochi-dash/README.md)**：比小恐龙丰富一丢丢的色彩和手感。不同角色、不同场景，
+难度完全没有区别 —— 选什么看我心情！没有复杂的玩法，也没有终点。摸鱼时拒绝压力。
+
+Start with **[mochi-dash](mochi-dash/README.md)**: a bit more colour and a bit
+more feel than the dino. Four characters, two places to run, and not one of them
+is any harder than another — pick whichever you are in the mood for. Nothing to
+learn, nowhere to get to, and nothing at stake while you are meant to be working.
+
+Play it in a browser, no install: <https://lydiazly.github.io/rabbithole/>
+
+## Playing
+
+Each game is a self-contained [uv](https://docs.astral.sh/uv/) project in its own
+directory. `play` finds them, so nothing needs listing anywhere:
 
 ```sh
 ./play           # pick from a menu
@@ -10,17 +28,11 @@ its own directory.
 
 `R` plays again and `Q` quits, in all of them.
 
-A game that draws in a window says so in its `pyproject.toml`, and `play` starts
-it in the background, hands the terminal straight back, and sends anything it
-prints to `$TMPDIR/rabbithole-<game>.log`:
-
-```toml
-[tool.rabbithole]
-launch = "windowed"
-```
-
-The default is the terminal, which is the screen for the curses games: they hold
-it until they exit, because detaching one from its tty kills it.
+| game | | |
+|---|---|---|
+| [mochi-dash](mochi-dash/README.md) | a window | endless runner, jump and duck |
+| [snake](snake/README.md) | terminal | eat, grow, don't bite yourself |
+| [breakout](breakout/README.md) | terminal | clear the bricks, three lives |
 
 ## Playing without a checkout
 
@@ -30,46 +42,24 @@ The terminal games are pure standard library, so there is nothing to install:
 uvx --from "git+https://github.com/lydiazly/rabbithole#subdirectory=snake" snake
 ```
 
-Mochi Dash plays in a browser at <https://lydiazly.github.io/rabbithole/>, built
-by `.github/workflows/pages.yml` on every push to `main` (Pages source: GitHub
+Mochi Dash plays in the browser at the link above, built by
+`.github/workflows/pages.yml` on every push to `main` (Pages source: GitHub
 Actions). It carries no assets, so the download is small; the CPython and pygame
 runtime comes from the pygame-web CDN at load time.
 
-## snake
+## Adding a game
 
-Terminal. Steer with the arrow keys or `WASD`, eat the food to grow. Hitting a
-wall or your own tail ends the run, and every meal makes you faster.
+Drop in a subdirectory with a `pyproject.toml` that declares a
+`[project.scripts]` entry, and `play` picks it up with no edit. A game that draws
+in a window says so, and is then started in the background so the terminal comes
+straight back:
 
-## breakout
+```toml
+[tool.rabbithole]
+launch = "windowed"
+```
 
-Terminal. Slide the paddle with `←`/`→` or `A`/`D`, launch with `space`, and
-clear all four rows of bricks. Hitting the ball with the outer third of the
-paddle angles it that way. Three lives.
-
-## mochi-dash
-
-A window. Endless runner, named for how the characters move. The menu picks a
-character and a place to run through — Momo the slime, Coco the cat, Jojo the
-bird or Bobo the shiba, in a desert or a snowfield; both choices are looks
-only, and neither changes the difficulty. Then `space` or `W` to jump, and again in mid-air for a
-second jump worth about half as much height on top; the timing is forgiving,
-and the arc flattens at the top so clearing something is not a matter of one
-frame. `S` flattens you under low flyers, and `A`/`D` shift where you stand,
-further back buying reaction time. `P` pauses — clicking away from the window
-pauses too, though coming back does not un-pause, so you land where you left
-off. `M` reopens the menu, which also switches the sound off.
-
-It also plays by mouse or touch. Left button jumps and right button ducks, held
-for a higher jump the same way the keys are. On a touchscreen, where there are
-no buttons to tell apart, press the sky to jump and the character or the ground
-to duck. Either way a press gets you through the menus.
-
-It opens easy — nothing but single cacti while you find the jump — and adds
-taller ones, clusters and flyers as it speeds up, spacing them a little tighter
-as it goes. Scoring pays for what an obstacle asked of you: a point for a
-cactus and two for a tall one, two for a flyer low enough to duck, and nothing
-at all for one that sails past overhead. Every twenty points earns a **dash** —
-a few seconds of running much faster and flattening whatever is in the way
-instead of dying to it. It warns you before it goes, thins the traffic out as it
-does, and leaves you a clear screen for two seconds afterwards to find your
-footing again. Your best run is saved.
+The default is the terminal, which is the screen for the curses games: they hold
+it until they exit, because detaching one from its tty kills it. A backgrounded
+game's output goes to `~/Library/Logs/rabbithole/` on macOS and
+`$XDG_STATE_HOME/rabbithole/` (usually `~/.local/state`) elsewhere.

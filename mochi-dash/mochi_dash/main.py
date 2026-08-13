@@ -102,6 +102,12 @@ MENU_HIT_PAD = 4          # canvas rows either side of a row's text
 MENU_START_FROM = 92      # below the list: the "SPACE START" line
 TITLE_MENU_ROW = 65       # the title screen's "M - MENU" line
 
+# The HUD's hotkey line, which is also its button row: with no keyboard these
+# labels are the only way to pause, retry or reach the menu. Kept as parts rather
+# than one string so the same layout draws them and decides what a press hits.
+HUD_BUTTONS = (("P PAUSE", "pause"), ("R RETRY", "retry"), ("M MENU", "menu"))
+HUD_BUTTON_GAP = 2  # spaces between them
+
 # Losing the window pauses a run. Minimising is included because it does not
 # always come with a focus-lost event, and a run that carried on inside an
 # iconified window would be over by the time it was reopened. Read through
@@ -506,8 +512,29 @@ class Game:
             return True
         x, y = point
 
-        if self.state == PLAYING and not self.paused:
-            self.press_in_play(event, mouse, y)
+        if self.state == PLAYING:
+            # The hotkey row is a row of buttons before it is anything else, and
+            # it works paused as well as running -- being unable to reach "menu"
+            # while paused would be a corner with no way out of it on a phone.
+            if not mouse or event.button == MOUSE_JUMP_BUTTON:
+                action = self.hud_button_at(x, y)
+                if action == "pause":
+                    self.paused = not self.paused
+                    return True
+                if action == "menu":
+                    self.go_to_menu()
+                    return True
+                if action == "retry":
+                    self.start_run()
+                    return True
+                if self.paused:
+                    # Anything else while paused resumes and is spent doing it.
+                    # A press that both resumed and jumped would be a jump the
+                    # player never saw coming.
+                    self.paused = False
+                    return True
+            if not self.paused:
+                self.press_in_play(event, mouse, y)
             return True
         # Everywhere else is a menu, and menus take the button a menu takes.
         if mouse and event.button != MOUSE_JUMP_BUTTON:
@@ -765,12 +792,19 @@ class Game:
         sheet = (characters.sheet_for(character, step) if dash_tint is None
                  else characters.dash_sheet_for(character, dash_tint))
         left, top = pos
-        if character.accessory is not None:
+
+        def blit_accessory():
             facings = sheet.accessory[accessory_frame]
             dy, placements = character.accessory_anchors[frame]
             for dx, flipped in placements:
                 self.canvas.blit(facings[flipped], (left + dx, top + dy))
+
+        wears = character.accessory is not None
+        if wears and not character.accessory.in_front:
+            blit_accessory()
         self.canvas.blit(sheet.poses[frame], pos)
+        if wears and character.accessory.in_front:
+            blit_accessory()
 
     PULSE_MIDDLE = 41  # the row a pulsing prompt is centred on
 
@@ -801,6 +835,7 @@ class Game:
     # in the far corner. They are also the longer line by a good margin, so the
     # right-hand side is where there is room for them.
     HUD_MARGIN = 6
+    HUD_ROW = 6
 
     def score_line(self) -> str:
         """The top-left text. Also sets how wide the meter under it is drawn."""
@@ -808,13 +843,38 @@ class Game:
             return f"HI {self.highscore:04d}  {self.score:04d}"
         return f"{self.score:04d}"
 
+    def hud_buttons(self):
+        """(action, x, width) for each hotkey on the HUD line, right-aligned.
+
+        The same arithmetic draws the line and decides what a press on it hits,
+        so a label cannot end up somewhere other than the thing it names. That
+        matters more than it looks: on a phone this row is the only way to pause,
+        retry or reach the menu, because there is no keyboard to press.
+        """
+        line = (" " * HUD_BUTTON_GAP).join(label for label, _ in HUD_BUTTONS)
+        x = world.WIDTH - pixelfont.text_width(line) - self.HUD_MARGIN
+        spans = []
+        for label, action in HUD_BUTTONS:
+            spans.append((action, x, pixelfont.text_width(label)))
+            x += (len(label) + HUD_BUTTON_GAP) * pixelfont.ADVANCE
+        return line, spans
+
+    def hud_button_at(self, x: float, y: float):
+        """Which HUD hotkey a press landed on, if any."""
+        if not (self.HUD_ROW - MENU_HIT_PAD
+                <= y < self.HUD_ROW + pixelfont.GLYPH_H + MENU_HIT_PAD):
+            return None
+        for action, left, width in self.hud_buttons()[1]:
+            if left <= x < left + width:
+                return action
+        return None
+
     def draw_hud(self, ink, halo) -> None:
-        self.text(self.score_line(), 6, ink, halo, x=self.HUD_MARGIN)
+        self.text(self.score_line(), self.HUD_ROW, ink, halo, x=self.HUD_MARGIN)
 
         if self.state == PLAYING:
-            keys = "P PAUSE  R RETRY  M MENU"
-            self.text(keys, 6, ink, halo,
-                      x=world.WIDTH - pixelfont.text_width(keys) - self.HUD_MARGIN)
+            line, spans = self.hud_buttons()
+            self.text(line, self.HUD_ROW, ink, halo, x=spans[0][1])
             self.draw_dash_meter(ink, halo)
             if self.paused:
                 self.text("PAUSED", 34, ink, halo, 2)
