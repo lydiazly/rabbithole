@@ -85,9 +85,7 @@ def _parse(raw: str | None) -> int:
 def load() -> int:
     """The stored high score, or zero if there isn't a usable one."""
     if BROWSER:
-        from platform import window
-
-        return _parse(window.localStorage.getItem(KEY))
+        return _parse(_browser_get())
     try:
         return _parse(FILE.read_text())
     except OSError:
@@ -100,9 +98,31 @@ def load() -> int:
 
 def save(score: int) -> None:
     if BROWSER:
-        from platform import window
-
-        window.localStorage.setItem(KEY, str(score))
+        _browser_set(str(score))
         return
     FILE.parent.mkdir(parents=True, exist_ok=True)
     FILE.write_text(f"{score}\n")
+
+
+# localStorage is the one storage backend that can refuse to exist. Safari in
+# private browsing gives the page a store with a quota of zero, so writing to it
+# throws, and stricter privacy settings make touching it at all throw. Both are
+# the browser's decision and neither is worth ending a run over, which is the
+# difference from the desktop: there, a write that fails is a bug worth seeing,
+# because the directory is one this code chose and created.
+def _browser_get():
+    try:
+        from platform import window
+
+        return window.localStorage.getItem(KEY)
+    except Exception:  # noqa: BLE001 -- whatever the browser raises is a "no"
+        return None
+
+
+def _browser_set(value: str) -> None:
+    try:
+        from platform import window
+
+        window.localStorage.setItem(KEY, value)
+    except Exception:  # noqa: BLE001
+        pass  # played in a private tab: the run still counts, it just isn't kept

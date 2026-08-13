@@ -147,3 +147,40 @@ def test_the_browser_backend_uses_local_storage(monkeypatch):
 
     store[storage.KEY] = "scribbled on"
     assert storage.load() == 0
+
+
+def test_a_browser_that_refuses_local_storage_is_survivable(monkeypatch):
+    """Safari in a private tab hands the page a store with a quota of zero, so
+    writing throws; stricter settings make touching it at all throw.
+
+    Both are the browser's decision, and neither is worth ending a run over --
+    which is the opposite of the desktop, where a failed write means a directory
+    this code chose and created is broken, and that is worth seeing.
+    """
+    import sys
+    import types
+
+    class Hostile:
+        def getItem(self, key):  # noqa: N802
+            raise RuntimeError("SecurityError: the operation is insecure")
+
+        def setItem(self, key, value):  # noqa: N802
+            raise RuntimeError("QuotaExceededError")
+
+    module = types.ModuleType("platform")
+    module.window = types.SimpleNamespace(localStorage=Hostile())
+    monkeypatch.setitem(sys.modules, "platform", module)
+    monkeypatch.setattr(storage, "BROWSER", True)
+
+    assert storage.load() == 0
+    storage.save(99)  # must not raise
+
+
+def test_a_browser_with_no_storage_object_at_all_is_survivable(monkeypatch):
+    """The import itself is what fails if the page never provided one."""
+    import sys
+
+    monkeypatch.setitem(sys.modules, "platform", None)
+    monkeypatch.setattr(storage, "BROWSER", True)
+    assert storage.load() == 0
+    storage.save(1)
