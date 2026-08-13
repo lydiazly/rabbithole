@@ -8,6 +8,14 @@ name: pages
 on:
   push:
     branches: [main]
+    paths-ignore:
+      # Prose and pictures. Neither reaches the published page -- the build
+      # stages mochi-dash/main.py and the package and nothing else -- so a
+      # README edit was spending a full pygbag build to deploy a byte-identical
+      # site. A push touching docs *and* code still runs, since the filter is
+      # over everything the push changed rather than each file.
+      - '**.md'
+      - 'media/**'
   workflow_dispatch: # for republishing without a commit
 
 permissions:

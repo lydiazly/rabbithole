@@ -8,7 +8,22 @@ name: ci
 
 on:
   push:
+    paths-ignore:
+      # Prose and pictures: nothing here is tested, shellchecked, or resolved as
+      # an entry point, so a README edit was spending a run to prove nothing.
+      #
+      # A push touching docs *and* code still runs -- the filter is over
+      # everything the push changed, not each file. And if this repo ever gets
+      # branch protection, note that a required check which is skipped rather
+      # than passed leaves a pull request waiting forever; that is the trap
+      # here, and it is only safe today because there is none.
+      - '**.md'
+      - 'media/**'
   pull_request:
+    paths-ignore:
+      # The same list for the same reason, spelled out above.
+      - '**.md'
+      - 'media/**'
 
 # A superseded run on the same branch is worth nothing, so let a new push
 # cancel it. The opposite of pages.yml, where a half-finished deploy is worse
