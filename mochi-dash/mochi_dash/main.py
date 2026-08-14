@@ -173,8 +173,12 @@ DASH_SHIMMER_TICKS = 3  # frames per palette step, while dashing
 # top speed, against a 300px canvas, so past here the rule saturates into "no
 # obstacle is on screen ahead of you" and asking for more changes nothing.
 # Measured across eighty dashes, raising it further moves neither the worst case
-# nor the hold. The hold stays bounded because obstacles spawn at the right edge:
-# mean 0.67s, worst 3.55s, and it never fails to find an exit.
+# nor the hold, and it never fails to find an exit.
+#
+# That saturation is only true *at* top speed, which is what made the screen
+# clause a separate rule rather than a consequence of this one: at half the ramp
+# the clearance stops around x=213, leaving most of the canvas free for an
+# obstacle to be standing in when the dash ends. See exit_is_clear.
 DASH_EXIT_REACTION = 0.75
 DASH_EXIT_CLEARANCE = world.JUMP_AIRTIME + DASH_EXIT_REACTION
 
@@ -193,9 +197,13 @@ DASH_WARN_GAP_SCALE = 1.8
 # Then nothing at all for a moment. An ordinary gap can never leave the screen
 # empty -- the spawner measures distance, so something is always on its way in --
 # and an empty screen is the clearest possible statement that the dash is over
-# and the next thing is the player's problem. Two seconds until the next obstacle
-# appears at the right edge, and then the width of the canvas again before it
-# arrives, which is the breather the boost was borrowing against.
+# and the next thing is the player's problem. Three seconds until the next
+# obstacle appears at the right edge, and then the width of the canvas again
+# before it arrives, which is the breather the boost was borrowing against.
+#
+# The hush is only half of that promise: it stops the world spawning, and cannot
+# take away what is already on the canvas. The other half is the exit check,
+# which is why that waits for an empty screen and not only for room to react.
 DASH_RECOVERY = 3.0
 
 # The warning starts before the dash does, not at the moment it ends: by then
@@ -414,16 +422,34 @@ class Game:
         sfx.play("power_down")
 
     def exit_is_clear(self) -> bool:
-        """Whether there is room ahead to react once the boost drops.
+        """Whether the dash may hand the run back: room to react, and an empty
+        screen to read the countdown over.
 
         "Ahead" means anything not yet fully behind the player, not just
         anything past their nose. The difference is one frame wide and it was a
         death: an obstacle reaching the player stopped counting as ahead at the
         same tick it started counting as a collision.
+
+        The canvas width is the second half of the rule, and it is not the same
+        statement as the reaction clearance. That clearance is a length of time,
+        so it shrinks with the speed: at top speed it already reaches past the
+        right-hand edge, but at half the ramp it stops short of it and the dash
+        would end with an obstacle plainly standing there -- which then walked
+        into the player around a second and a half later, while the breather's
+        countdown was still on the screen saying the run had not resumed.
+        Measured before this clause existed: 47 of 400 dashes, arriving as early
+        as 1.48s into a 3s breather.
+
+        Waiting for the screen instead costs a fraction of a second, because the
+        wait is spent still dashing and still smashing while nothing more spawns,
+        so the canvas can only drain. Over the same 400 dashes, spread along the
+        speed ramp: the hold goes from a mean of 0.20s and a worst of 0.83s to
+        0.30s and 1.47s, none of them ends with anything on screen, and none of
+        them fails to find an exit.
         """
         left, _, width, _ = self.player.hitbox()
         front = left + width
-        reach = DASH_EXIT_CLEARANCE * self.world.speed
+        reach = max(DASH_EXIT_CLEARANCE * self.world.speed, world.WIDTH)
         return not any(
             not ob.launched and ob.x + ob.w > left and ob.x < front + reach
             for ob in self.world.obstacles
@@ -742,9 +768,22 @@ class Game:
 
         if self.dashing:
             self.dash_left = max(0.0, self.dash_left - dt)
-            self.world.gap_scale = DASH_WARN_GAP_SCALE if self.dash_ending else 1.0
-            if self.dash_left <= 0.0 and self.exit_is_clear():
-                self.end_dash()
+            if self.dash_left > 0.0:
+                self.world.gap_scale = DASH_WARN_GAP_SCALE if self.dash_ending else 1.0
+            else:
+                # The clock is spent and the dash is only waiting for the screen
+                # to clear, so the breather's hush starts here rather than at the
+                # end of the wait. Anything spawned during the wait is by
+                # definition still on the canvas when the dash ends, and so is
+                # one more thing to wait for: left spawning, the wait fed itself
+                # and ran to 5.15s at the bottom of the speed ramp, longer than
+                # the dash. Silenced, the canvas can only drain, and the wait is
+                # bounded by what it takes the far edge to cross the screen.
+                # Re-armed every frame on purpose: the hush is a countdown, and
+                # this is the phase that must not let it reach the end.
+                self.world.hush(DASH_RECOVERY)
+                if self.exit_is_clear():
+                    self.end_dash()
         else:
             self.recovery = max(0.0, self.recovery - dt)
             self.dash_cooldown = max(0.0, self.dash_cooldown - dt)

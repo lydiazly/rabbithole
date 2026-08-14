@@ -912,6 +912,121 @@ def test_the_dash_exit_needs_room_to_react():
     assert main.DASH_EXIT_CLEARANCE * wd.SPEED_MAX <= wd.WIDTH
 
 
+def test_the_dash_does_not_end_with_an_obstacle_still_standing_on_screen():
+    """The breather promises an empty screen, and the countdown is drawn over it.
+
+    `hush` only stops new spawns; it cannot take away what is already on the
+    canvas. The reaction clearance reserved 1.35s of travel and nothing more, so
+    below top speed the rest of the screen was free for an obstacle to be
+    standing in when the dash ended -- and it then walked into the player while
+    the countdown still read 2. Measured before this was fixed: the dash ended
+    with something on screen in 47 of 400 dashes, arriving as early as 1.48s
+    into a 3s breather.
+
+    At top speed the clearance already reaches past the canvas, which is why
+    this was only ever visible mid-run.
+    """
+    import pygame
+    pygame.init()
+    pygame.display.set_mode((1, 1))
+
+    class Held(dict):
+        def __getitem__(self, key):
+            return self.get(key, False)
+
+    real = pygame.key.get_pressed
+    pygame.key.get_pressed = lambda: Held()
+    try:
+        # Mid-ramp, where the clearance stops short of the right-hand edge.
+        speed = wd.SPEED_START + wd.SPEED_RANGE * 0.3
+        game = main.Game()
+        game.start_run()
+        game.world.speed = speed
+        game.start_dash()
+        game.world.hush(99.0)  # nothing else may spawn into the experiment
+        left, _, width, _ = game.player.hitbox()
+        assert main.DASH_EXIT_CLEARANCE * speed + left + width < wd.WIDTH, (
+            "pick a speed whose clearance leaves screen to stand in"
+        )
+        w, h = wd.SMALL_BOX
+        ob = wd.Obstacle(wd.WIDTH - w - 1.0, wd.GROUND_Y - h, w, h, "small")
+        game.world.obstacles = [ob]
+        game.dash_left = main.DT * 0.5  # the clock is spent; only the exit is left
+
+        for _ in range(int(10.0 / main.DT)):
+            if not game.dashing:
+                break
+            game.update(main.DT)
+            left, _, width, _ = game.player.hitbox()
+            if ob in game.world.obstacles and not ob.launched and ob.x + ob.w > left:
+                assert game.dashing, (
+                    f"the dash ended with an obstacle at x={ob.x:.0f} still on "
+                    f"screen, {(ob.x + ob.w - left) / speed:.2f}s from the player"
+                )
+        assert not game.dashing, "the dash never found its exit"
+        assert game.state == main.PLAYING
+    finally:
+        pygame.key.get_pressed = real
+
+
+def test_a_dash_hands_back_an_empty_screen_however_the_run_was_going(monkeypatch):
+    """The same thing again, against traffic the world laid out for itself.
+
+    The hand-placed case pins the rule; this pins the promise. Every dash, at
+    every point on the speed ramp, has to hand back a canvas with nothing on it,
+    because that is what the countdown is counting down over.
+    """
+    import pygame
+    pygame.init()
+    pygame.display.set_mode((1, 1))
+    monkeypatch.setattr(storage, "save", lambda score: None)
+
+    class Held(dict):
+        def __getitem__(self, key):
+            return self.get(key, False)
+
+    monkeypatch.setattr(pygame.key, "get_pressed", lambda: Held())
+
+    held = []
+    for seed in range(40):
+        game = main.Game()
+        game.rng.seed(seed)
+        game.world.rng = game.rng
+        game.start_run()
+        game.world.speed = wd.SPEED_START + wd.SPEED_RANGE * (seed % 20) / 19.0
+        game.start_dash()
+        waited = 0.0
+        for _ in range(int(30.0 / main.DT)):
+            if not game.dashing:
+                break
+            game.update(main.DT)
+            if game.dashing and game.dash_left <= 0.0:
+                waited += main.DT
+        assert not game.dashing, f"seed {seed}: the dash never found its exit"
+        assert game.state == main.PLAYING, f"seed {seed}: died while invincible"
+        held.append(waited)
+
+        left, _, width, _ = game.player.hitbox()
+        standing = [
+            ob for ob in game.world.obstacles
+            if not ob.launched and ob.x + ob.w > left
+        ]
+        if standing:
+            nearest = (min(o.x for o in standing) - left) / game.world.speed
+            raise AssertionError(
+                f"seed {seed}: the countdown starts with {len(standing)} "
+                f"obstacle(s) on screen, nearest {nearest:.2f}s from the player"
+            )
+
+    # And the wait for that screen stays a moment, not a second dash. Spawning
+    # stops when the clock does, so the worst the wait can be is the far edge of
+    # the canvas crossing it at the slowest a boosted world ever moves. Left
+    # spawning, the wait fed itself -- every arrival was one more thing to wait
+    # for -- and reached 5.15s, longer than the dash it was extending.
+    bound = wd.WIDTH / (wd.SPEED_START * main.DASH_BOOST)
+    assert max(held) < bound, f"held open for {max(held):.2f}s, bound {bound:.2f}s"
+
+
 def test_losing_the_window_pauses_a_run_but_regaining_it_does_not_resume():
     """Clicking away is not a decision to keep running; clicking back is not a
     decision to be mid-jump.
