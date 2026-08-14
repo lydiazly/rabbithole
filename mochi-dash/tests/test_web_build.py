@@ -134,6 +134,58 @@ def test_the_page_script_is_injected_and_stays_optional():
     assert out.index("<style>") < out.index("<script>") < out.index("</head>")
 
 
+# Both shapes trim() looks for, in the order pygbag's own template has them.
+BUILT_LOADER = (
+    '<html lang="en-us"><script src="cdn/pythons.js" data-os="vtx,snd,gui"></script>\n'
+    '    <script src="https://pygame-web.github.io/cdn/0.9.3//browserfs.min.js"></script>\n'
+    "<head></head><body></body></html>"
+)
+
+
+def test_the_terminal_emulator_is_taken_out_of_the_loader():
+    """The game draws to a canvas and never writes to a terminal.
+
+    pygbag's template asks for the `vtx` feature, which pulls xterm.js, its image
+    addon and its stylesheet from the CDN: 85 KiB over three cross-origin
+    requests, on every first load, for a screen this game has no way to reach.
+    """
+    out = script("restyle").trim(BUILT_LOADER)
+    assert 'data-os="snd,gui"' in out
+    assert "vtx" not in out
+
+
+def test_the_request_that_always_fails_is_taken_out_too():
+    """browserfs.min.js is not on the CDN, at that path or any other.
+
+    Measured: every load asks for it and every load is refused. A request that
+    cannot succeed is not a fallback, it is just a request.
+    """
+    out = script("restyle").trim(BUILT_LOADER)
+    assert "browserfs" not in out
+    # And the tag it sat on is gone with it, rather than left as a blank line
+    # inside the loader's markup.
+    assert "<script src=\"cdn/pythons.js\"" in out.replace(
+        ' data-os="snd,gui"', "")
+
+
+@pytest.mark.parametrize("page,missing", [
+    ('<html><script src="x/browserfs.min.js"></script></html>', "data-os"),
+    ('<html><script data-os="vtx,snd,gui"></script></html>', "browserfs"),
+    ('<html><script data-os="snd,gui"></script>'
+     '<script src="x/browserfs.min.js"></script></html>', "vtx"),
+])
+def test_trimming_a_loader_it_does_not_recognise_is_an_error(page, missing):
+    """Same reason the stylesheet raises: the failure to avoid is doing nothing
+    quietly and shipping pygbag's default anyway.
+
+    pygbag is pinned in the workflow, so any of these going missing means the
+    template changed under a version bump and the saving needs re-measuring
+    rather than assuming.
+    """
+    with pytest.raises(ValueError, match=missing):
+        script("restyle").trim(page)
+
+
 def test_the_page_script_refuses_the_context_menu():
     """Pinned by content: without this, every duck in a desktop browser opens a
     menu on top of the game.
