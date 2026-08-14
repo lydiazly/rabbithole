@@ -31,7 +31,8 @@ directory. `play` finds them, so nothing needs listing anywhere:
 ./play mochi-dash  # start one directly
 ```
 
-`R` plays again and `Q` quits, in all of them.
+`R` plays again and `Q` quits, in all of them. Quitting is a desktop idea, so the
+browser build is the one exception — see below.
 
 | game | | |
 |---|---|---|
@@ -50,7 +51,10 @@ uvx --from "git+https://github.com/lydiazly/rabbithole#subdirectory=mochi-dash" 
 Mochi Dash plays in the browser at the link above, built by
 `.github/workflows/pages.yml` on every push to `main` (Pages source: GitHub
 Actions). It carries no assets, so the download is small; the CPython and pygame
-runtime comes from the pygame-web CDN at load time.
+runtime comes from the pygame-web CDN at load time. It binds no quit key and its
+title screen offers none: a page cannot close a tab it did not open, so quitting
+could only stop the game and leave the picture standing there. Close the tab
+instead.
 
 ## Adding a game
 

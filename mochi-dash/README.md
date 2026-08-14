@@ -42,7 +42,9 @@ flyers. `A`/`D` shift where you stand, further back buying reaction time.
 
 `P` pauses — clicking away from the window pauses too, though coming back does
 not un-pause, so you land where you left off. `M` reopens the menu, which is also
-where the sound is switched off. `R` plays again, `Q` quits.
+where the sound is switched off. `R` plays again, `Q` quits. In the browser there
+is no quit key: a page cannot close a tab it did not open, so quitting could only
+stop the game and leave the picture standing there. Close the tab instead.
 
 It plays by mouse or touch as well. Left button jumps and right button ducks,
 held for a higher jump the same way the keys are. On a touchscreen, where there
