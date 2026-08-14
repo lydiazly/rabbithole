@@ -208,9 +208,14 @@ DASH_RECOVERY = 3.0
 
 # The warning starts before the dash does, not at the moment it ends: by then
 # the player has no time left to do anything with it. "GET READY" rides the last
-# stretch of the dash, and the countdown then runs through the breather, so the
-# whole handover is one continuous piece of information rather than an event to
-# be caught. Three seconds of breather, three numbers, one each.
+# stretch of the dash's clock, and the countdown then runs through the breather,
+# so the handover is one piece of information rather than an event to be caught.
+# Three seconds of breather, three numbers, one each.
+#
+# It rides the clock and not the dash, which are the same thing only until the
+# clock runs out: past that the dash is still up, waiting for the screen to
+# clear, and there is nothing left for the player to get ready with. The words
+# stop at zero -- see draw_hud, which is also where the wait used to freeze them.
 DASH_OVER_PROMPT = "GET READY"
 DASH_COUNTDOWN_FROM = 3
 
@@ -968,9 +973,14 @@ class Game:
                 # Timed off the dash's own clock, not the global tick: phased
                 # against the tick, a prompt starts wherever it happens to land.
                 elapsed = DASH_SECONDS - self.dash_left
-                if self.dash_ending:
+                if self.dash_ending and self.dash_left > 0.0:
                     # The handover begins while the dash is still up, so the
-                    # warning arrives with time left to act on it.
+                    # warning arrives with time left to act on it -- and it goes
+                    # when that time does. Past zero the dash is only waiting for
+                    # the screen to clear, which is not something the player has
+                    # anything to do about, and the beat this pulses on is
+                    # measured from the same clock: stopped, it froze the words
+                    # at their swollen size for the whole of the wait.
                     self.pulsed(DASH_OVER_PROMPT,
                                 DASH_WARN_SECONDS - self.dash_left, PROMPT_SCALES,
                                 ink, halo)

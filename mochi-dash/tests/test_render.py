@@ -208,3 +208,49 @@ def test_the_dash_handover_draws_end_to_end(game):
         prompts += game.dashing or game.recovery > 0.0
     assert prompts > 0
     assert not game.dashing and game.recovery == 0.0, "the handover never finished"
+
+
+def test_the_warning_stops_when_the_clock_does_rather_than_hanging(game, monkeypatch):
+    """"GET READY" is only worth saying while there is time left to act on it.
+
+    Once the clock is spent the dash stays up until the screen clears, and the
+    prompt was drawn through the whole of that wait -- frozen, as it happens,
+    because the beat it pulses on is measured from the clock, and the clock had
+    stopped: `DASH_WARN_SECONDS - 0.0` is the same number every frame, so it sat
+    at the swollen size for as long as the wait lasted. Held up to 1.47s, saying
+    something was about to happen while it did not.
+    """
+    drawn = []
+    real = m.Game.pulsed
+
+    def record(self, line, elapsed, scales, ink, halo):
+        drawn.append((self.dash_left if self.dashing else None, line))
+        real(self, line, elapsed, scales, ink, halo)
+
+    monkeypatch.setattr(m.Game, "pulsed", record)
+
+    # Mid-ramp, and an obstacle far enough out that the exit has to wait for it.
+    game.start_run()
+    game.world.speed = wd.SPEED_START + wd.SPEED_RANGE * 0.3
+    game.start_dash()
+    game.world.hush(99.0)
+    w, h = wd.SMALL_BOX
+    game.world.obstacles = [
+        wd.Obstacle(wd.WIDTH - w - 1.0, wd.GROUND_Y - h, w, h, "small")
+    ]
+    game.dash_left = m.DASH_WARN_SECONDS * 0.5  # part-way into the warning
+
+    waited = 0.0
+    while game.dashing and waited < 10.0:
+        game.held.clear()
+        game.update(m.DT)
+        game.draw()
+        if game.dashing and game.dash_left <= 0.0:
+            waited += m.DT
+    assert waited > m.DT * 3, "the exit never had to wait, so nothing was proved"
+
+    warned = [left for left, line in drawn if line == m.DASH_OVER_PROMPT]
+    assert warned, "the warning never appeared at all"
+    assert all(left > 0.0 for left in warned), (
+        f"the warning was still on screen with the clock at zero: {warned[-3:]}"
+    )
