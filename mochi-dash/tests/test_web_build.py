@@ -134,9 +134,10 @@ def test_the_page_script_is_injected_and_stays_optional():
     assert out.index("<style>") < out.index("<script>") < out.index("</head>")
 
 
-# Both shapes trim() looks for, in the order pygbag's own template has them.
+# Every shape trim() looks for, in the order pygbag's own template has them.
 BUILT_LOADER = (
     '<html lang="en-us"><script src="cdn/pythons.js" data-os="vtx,snd,gui"></script>\n'
+    '        msg  = "Ready to start ! Please click/touch page"\n'
     '    <script src="https://pygame-web.github.io/cdn/0.9.3//browserfs.min.js"></script>\n'
     "<head></head><body></body></html>"
 )
@@ -168,11 +169,44 @@ def test_the_request_that_always_fails_is_taken_out_too():
         ' data-os="snd,gui"', "")
 
 
+def test_the_wait_for_a_gesture_says_it_in_four_words():
+    """pygbag's own wording is nine, with a space before its exclamation mark.
+
+    Most players never see this line at all, because page.js remembers a tap made
+    while the runtime loads and replays it. What is left is somebody sitting there
+    waiting to be told what to do, and the shorter sentence tells them.
+    """
+    restyle = script("restyle")
+    out = restyle.trim(BUILT_LOADER)
+    assert restyle.START_SAYS in out
+    assert "Ready to start" not in out
+    assert " !" not in out, "the space before the exclamation mark survived"
+    assert len(restyle.START_SAYS.split()) <= 5, restyle.START_SAYS
+
+
+def test_a_tap_made_while_it_loads_is_not_thrown_away():
+    """The gate is armed after several megabytes have arrived, so a tap made
+    during the wait lands on nothing and the player is asked for a second one.
+
+    A gesture is a fact about the page, not about the moment, so the first one is
+    remembered and replayed once there is something listening.
+    """
+    source = (ROOT / "web" / "page.js").read_text()
+    assert "gestured" in source, "nothing remembers an early gesture"
+    assert "setInterval" in source, "nothing retries once the gate is armed"
+    assert "clearInterval" in source, "the retry never stops"
+
+
 @pytest.mark.parametrize("page,missing", [
-    ('<html><script src="x/browserfs.min.js"></script></html>', "data-os"),
-    ('<html><script data-os="vtx,snd,gui"></script></html>', "browserfs"),
+    ('<html><script src="x/browserfs.min.js"></script>msg = "Ready to start !"'
+     "</html>", "data-os"),
+    ('<html><script data-os="vtx,snd,gui"></script>msg = "Ready to start !"'
+     "</html>", "browserfs"),
     ('<html><script data-os="snd,gui"></script>'
-     '<script src="x/browserfs.min.js"></script></html>', "vtx"),
+     '<script src="x/browserfs.min.js"></script>msg = "Ready to start !"</html>',
+     "vtx"),
+    ('<html><script data-os="vtx,snd,gui"></script>'
+     '<script src="x/browserfs.min.js"></script></html>', "start prompt"),
 ])
 def test_trimming_a_loader_it_does_not_recognise_is_an_error(page, missing):
     """Same reason the stylesheet raises: the failure to avoid is doing nothing

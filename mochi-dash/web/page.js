@@ -16,35 +16,61 @@
 addEventListener("contextmenu", (event) => event.preventDefault());
 
 /*
- * Let a tap get past pygbag's "ready to start" gate on iOS.
+ * Get the player past pygbag's start gate, and past it before they have seen it.
  *
  * pygbag will not start the game until a gesture has been recorded, because
- * audio needs one. How it waits for that gesture depends on the browser: on
- * anything that is not Safari it unlocks itself by playing a silent clip, but
- * for Safari -- and it treats any iPhone as Safari -- it puts a single listener
- * on `window` for a `click` and holds the loop until that listener fires. The
- * page then sits on "Ready to start ! Please click/touch page" for as long as no
- * click reaches the window object.
+ * audio needs one, and it cannot be talked out of that: the browsers require it.
+ * How it waits depends on which browser it thinks it has. On anything that is
+ * not Safari it unlocks itself by playing a silent clip. For Safari -- and
+ * feat_snd() treats any iPhone as Safari -- it puts one listener on `window` for
+ * a `click` and holds the loop until that fires, showing "Ready to start !
+ * Please click/touch page" in the meantime.
  *
- * On iOS a tap does not reliably get there. WebKit only synthesises the click
- * that bubbles to document and window when the thing under the finger is
- * something it considers clickable, and the thing under the finger here is a
- * message box, a canvas and the page behind them, none of which qualify. So the
- * gesture happens, the gate never hears about it, and the game never starts --
- * reported from an iPhone on iOS 17, where the page loads fully and then stops
- * on that message however many times it is tapped.
+ * Two things go wrong with that, and one listener fixes both.
  *
- * A touch listener always fires, so the click is sent on from one. Sending it
- * rather than relying on the CSS workaround alongside this makes it independent
- * of which element was touched. The listener takes itself off once the gate is
- * through, so nothing is dispatched into the running game: pygbag's own handler
- * removes itself at the same moment, which would leave these as clicks with
- * nothing listening -- harmless, but this is not a thing worth doing forever.
+ * On iOS the tap does not reliably arrive. WebKit synthesises the click that
+ * bubbles to document and window only when it considers the thing under the
+ * finger clickable, and here that is a message box, a canvas and the page behind
+ * them. The gesture happens and the gate never hears it, so the page sits on
+ * that message however many times it is tapped. Reported from an iPhone on iOS
+ * 17; passing the tap on as a click is what fixed it.
+ *
+ * And the gate is armed late -- after several megabytes of runtime have loaded
+ * -- so a tap made while waiting is thrown away, and the player is asked for a
+ * second one to no purpose. Since a gesture is a fact about the page rather than
+ * about the moment, the first one is remembered and replayed as soon as there is
+ * something listening. Anyone who touches the page while it loads never sees the
+ * message at all; anyone who does not still gets it, which is the point of it.
+ *
+ * The click is dispatched from the gesture as well as from the poll, so on iOS
+ * the flag is set inside the handler rather than a tick later. What unlocks the
+ * audio is the player's own tap either way: activation is sticky, and this only
+ * ever sets a flag that pygbag is already watching.
  */
-addEventListener("touchend", function unblock() {
+let gestured = false;
+
+function release() {
+    // MM is the loader's media manager. It exists before it is armed, so the
+    // absent-UME case has to keep trying rather than give up on the first look.
+    if (window.MM && !window.MM.UME) dispatchEvent(new MouseEvent("click"));
+}
+
+function remember() {
+    gestured = true;
+    release();
+}
+
+for (const type of ["pointerdown", "touchend", "keydown"]) {
+    addEventListener(type, remember, { passive: true });
+}
+
+const waiting = setInterval(() => {
     if (window.MM && window.MM.UME) {
-        removeEventListener("touchend", unblock);
+        clearInterval(waiting);
+        for (const type of ["pointerdown", "touchend", "keydown"]) {
+            removeEventListener(type, remember);
+        }
         return;
     }
-    dispatchEvent(new MouseEvent("click"));
-});
+    if (gestured) release();
+}, 100);

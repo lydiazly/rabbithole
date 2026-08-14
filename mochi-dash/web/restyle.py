@@ -37,6 +37,18 @@ DATA_OS = re.compile(r'(data-os=")([^"]*)(")')
 TERMINAL = "vtx"
 BROWSERFS = re.compile(r'[ \t]*<script src="[^"]*browserfs[^"]*"></script>\n?')
 
+# And it says the wrong thing when it has to say anything. pygbag's own wording
+# is "Ready to start ! Please click/touch page" -- nine words, a space before the
+# exclamation mark, and both halves of "click/touch" shown to everybody. page.js
+# means most players never see this at all, since a tap made while the runtime
+# loads is remembered and replayed, so what is left is the case where somebody is
+# waiting to be told what to do. Four words is enough to tell them.
+#
+# Anchored on the assignment rather than on the sentence, because the sentence
+# also appears in page.js's own comment about it, three hundred lines below.
+START_PROMPT = re.compile(r'(msg\s*=\s*)"Ready to start[^"]*"')
+START_SAYS = "Tap or click to start"
+
 
 def trim(html: str) -> str:
     """Return `html` with the terminal emulator and the dead request taken out."""
@@ -61,7 +73,15 @@ def trim(html: str) -> str:
             "no browserfs script tag in the built page -- pygbag has stopped "
             "asking for it, so this no longer has anything to remove"
         )
-    return BROWSERFS.sub("", html, count=1)
+    html = BROWSERFS.sub("", html, count=1)
+
+    if not START_PROMPT.search(html):
+        raise ValueError(
+            "no start prompt to reword in the built page -- pygbag has changed "
+            "what it says while it waits for a gesture, so this would leave its "
+            "wording in place while claiming to have replaced it"
+        )
+    return START_PROMPT.sub(rf'\1"{START_SAYS}"', html, count=1)
 
 
 def restyle(html: str, css: str, js: str = "") -> str:
