@@ -194,6 +194,30 @@ def test_the_page_script_refuses_the_context_menu():
     assert "contextmenu" in source and "preventDefault" in source
 
 
+def test_a_tap_is_passed_on_as_the_click_the_start_gate_waits_for():
+    """pygbag holds the game until a gesture is recorded, and on Safari -- which
+    is what it calls any iPhone -- it waits for a `click` on `window` and nothing
+    else. iOS only synthesises that click when WebKit thinks the thing under the
+    finger is clickable, and a canvas and a message box are not, so the gesture
+    happened and the gate never heard it.
+
+    Both halves are pinned because either alone would look like it worked on a
+    desktop, where the click arrives regardless.
+    """
+    source = (ROOT / "web" / "page.js").read_text()
+    assert "touchend" in source, "nothing listens for the tap"
+    assert 'MouseEvent("click")' in source, "the tap is not passed on as a click"
+    assert "removeEventListener" in source, (
+        "the listener never comes off, so it keeps firing into the running game"
+    )
+
+    style = STYLESHEET.read_text()
+    assert "pointer: coarse" in style and "cursor: pointer" in style, (
+        "the CSS half of the workaround is gone; page.js is then the only thing "
+        "standing between an iPhone and a page that never starts"
+    )
+
+
 def test_the_favicon_is_a_square_of_momo():
     """Square because tabs are, and not blank -- a transparent icon is invisible."""
     icon = game_icon.build()

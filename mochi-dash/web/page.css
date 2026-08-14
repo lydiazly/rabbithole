@@ -47,6 +47,22 @@ body {
     touch-action: none;
 }
 
+/* The other half of getting a tap past pygbag's "ready to start" gate, which
+   waits on a click reaching `window` and on iOS is not sent one unless WebKit
+   thinks the thing under the finger is clickable. A pointer cursor is what tells
+   it that, and it is the documented way round this; page.js sends the click on
+   from a touch as well, so neither has to be the one that works.
+
+   Behind `pointer: coarse` because a cursor is a thing a touchscreen does not
+   have: on a phone this changes nothing visible, and on a desktop it does not
+   apply at all, so the game is not dressed up as a link. */
+@media (pointer: coarse) {
+    html,
+    body {
+        cursor: pointer;
+    }
+}
+
 /* Capped at the desktop window's size and centred. Auto width and height let
    the canvas fall back to its own framebuffer size, and the max-* pair scales it
    down proportionally on a screen too small for it rather than cropping.
