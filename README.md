@@ -46,7 +46,7 @@ Nothing to install:
 uvx --from "git+https://github.com/lydiazly/rabbithole#subdirectory=mochi-dash" mochi-dash
 ```
 
-Mochi Dash also plays in the browser at the link above, built by
+Mochi Dash also plays at <https://lydiazly.github.io/rabbithole/>, built by
 `.github/workflows/pages.yml` on every push to `main` (Pages source: GitHub
 Actions). It ships no assets; the CPython and pygame runtime comes from the
 pygame-web CDN at load time.
