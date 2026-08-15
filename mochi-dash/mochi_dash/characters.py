@@ -41,10 +41,10 @@ class Character:
     name: str
     day: Look
     night: Look
-    # Its own seven poses. They must match POSE_SIZES frame for frame -- a
-    # character may look different but may never be a different size, because
-    # the hitboxes come from that one table.
-    poses: dict = None
+    # Its own seven poses, or None for the slime's. They must match POSE_SIZES
+    # frame for frame -- a character may look different but may never be a
+    # different size, because the hitboxes come from that one table.
+    poses: dict | None = None
     # None, or art to draw behind the head. A type rather than a per-feature
     # flag, so a character with horns instead of ears is a different value here
     # and no new code anywhere.
@@ -54,7 +54,9 @@ class Character:
     # the body's own colours, which is what ears want.
     accessory_day: Look | None = None
     accessory_night: Look | None = None
-    accessory_anchors: dict = None
+    # Filled in below from the accessory and the wearer's own poses; never
+    # passed in.
+    accessory_anchors: dict | None = None
 
     def __post_init__(self):
         poses = self.poses if self.poses is not None else sprites.SLIME_POSES

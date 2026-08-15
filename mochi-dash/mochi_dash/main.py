@@ -38,7 +38,7 @@ X_MIN = 22.0
 X_MAX = 110.0
 
 
-def quit_keys_for(browser: bool) -> tuple:
+def quit_keys_for(browser: bool) -> tuple[int, ...]:
     """The keys that end the game, which in a browser is none of them.
 
     Quitting is a desktop idea: the loop returns, the process ends, and the
@@ -117,6 +117,28 @@ TITLE_MENU_ROW = 65       # the title screen's "M - MENU" line
 # than one string so the same layout draws them and decides what a press hits.
 HUD_BUTTONS = (("P PAUSE", "pause"), ("R RETRY", "retry"), ("M MENU", "menu"))
 HUD_BUTTON_GAP = 2  # spaces between them
+
+
+def hud_layout(margin: int):
+    """(line, ((action, x, width), ...)) for the hotkey row, right-aligned.
+
+    One piece of arithmetic draws the line and decides what a press on it hits,
+    so a label cannot end up somewhere other than the thing it names. That
+    matters more than it looks: on a phone this row is the only way to pause,
+    retry or reach the menu, because there is no keyboard to press.
+
+    Worked out once, at import. Every input is a constant, and the answer was
+    being recomputed on each frame that drew the HUD and again on each press
+    that might have landed on it.
+    """
+    line = (" " * HUD_BUTTON_GAP).join(label for label, _ in HUD_BUTTONS)
+    x = world.WIDTH - pixelfont.text_width(line) - margin
+    spans = []
+    for label, action in HUD_BUTTONS:
+        spans.append((action, x, pixelfont.text_width(label)))
+        x += (len(label) + HUD_BUTTON_GAP) * pixelfont.ADVANCE
+    return line, tuple(spans)
+
 
 # The banner's own menu button. Any press there already means "carry on", so
 # without a target of its own the menu would be two screens away from the one
@@ -324,7 +346,9 @@ class Game:
         self.score = 0
         self.toward_dash = 0
         self.dash_left = 0.0
-        self.dash_on = False
+        # Invincible. Tracked apart from the clock above, which can run out
+        # while the dash is still being held open waiting for a clear exit.
+        self.dashing = False
         self.dash_cooldown = 0.0
         self.recovery = 0.0
         self.freeze = 0
@@ -362,7 +386,7 @@ class Game:
         self.score = 0
         self.toward_dash = 0
         self.dash_left = 0.0
-        self.dash_on = False
+        self.dashing = False
         self.dash_cooldown = 0.0
         self.recovery = 0.0
         self.freeze = 0
@@ -389,12 +413,6 @@ class Game:
     # -- the dash ---------------------------------------------------------
 
     @property
-    def dashing(self) -> bool:
-        """Invincible. Tracked apart from the clock, which can run out while the
-        dash is still being held open for a clear exit."""
-        return self.dash_on
-
-    @property
     def dash_target(self) -> int:
         """Points needed for the next dash. Grows with each one taken."""
         return DASH_EVERY + DASH_EVERY_STEP * self.dashes_taken
@@ -402,7 +420,7 @@ class Game:
     def start_dash(self) -> None:
         self.dashes_taken += 1
         self.dash_left = DASH_SECONDS
-        self.dash_on = True
+        self.dashing = True
         self.dash_cooldown = DASH_COOLDOWN
         self.toward_dash = 0
         self.world.boost = DASH_BOOST
@@ -416,10 +434,10 @@ class Game:
         # Dying calls this, and dying while dashing is the one thing that cannot
         # happen, so without the guard every death played the power-down over the
         # death sound and armed a breather for a run that was already over.
-        if not self.dash_on:
+        if not self.dashing:
             return
         self.dash_left = 0.0
-        self.dash_on = False
+        self.dashing = False
         self.world.boost = 1.0
         self.world.gap_scale = 1.0
         self.world.hush(DASH_RECOVERY)
@@ -896,8 +914,7 @@ class Game:
         """Centred by default, with a one-pixel shadow so it survives any sky."""
         if x is None:
             x = (world.WIDTH - pixelfont.text_width(line, scale)) // 2
-        pixelfont.draw(self.canvas, line, x + 1, y + 1, halo, scale)
-        pixelfont.draw(self.canvas, line, x, y, ink, scale)
+        pixelfont.draw_shadowed(self.canvas, line, x, y, ink, halo, scale)
 
     # The character runs between x=22 and x=110 of a 300-pixel canvas, so the
     # player's eye lives in the left third and the top-left corner is the
@@ -909,28 +926,13 @@ class Game:
     # right-hand side is where there is room for them.
     HUD_MARGIN = 6
     HUD_ROW = 6
+    HUD_LINE, HUD_SPANS = hud_layout(HUD_MARGIN)
 
     def score_line(self) -> str:
         """The top-left text. Also sets how wide the meter under it is drawn."""
         if self.highscore:
             return f"HI {self.highscore:04d}  {self.score:04d}"
         return f"{self.score:04d}"
-
-    def hud_buttons(self):
-        """(action, x, width) for each hotkey on the HUD line, right-aligned.
-
-        The same arithmetic draws the line and decides what a press on it hits,
-        so a label cannot end up somewhere other than the thing it names. That
-        matters more than it looks: on a phone this row is the only way to pause,
-        retry or reach the menu, because there is no keyboard to press.
-        """
-        line = (" " * HUD_BUTTON_GAP).join(label for label, _ in HUD_BUTTONS)
-        x = world.WIDTH - pixelfont.text_width(line) - self.HUD_MARGIN
-        spans = []
-        for label, action in HUD_BUTTONS:
-            spans.append((action, x, pixelfont.text_width(label)))
-            x += (len(label) + HUD_BUTTON_GAP) * pixelfont.ADVANCE
-        return line, spans
 
     def on_text_row(self, y: float, row: int) -> bool:
         """Whether a press landed on the line of text drawn at `row`.
@@ -954,18 +956,21 @@ class Game:
         """Which HUD hotkey a press landed on, if any."""
         if not self.on_text_row(y, self.HUD_ROW):
             return None
-        for action, left, width in self.hud_buttons()[1]:
+        for action, left, width in self.HUD_SPANS:
             if left <= x < left + width:
                 return action
         return None
 
     def draw_hud(self, ink, halo) -> None:
-        self.text(self.score_line(), self.HUD_ROW, ink, halo, x=self.HUD_MARGIN)
+        score = self.score_line()
+        self.text(score, self.HUD_ROW, ink, halo, x=self.HUD_MARGIN)
 
         if self.state == PLAYING:
-            line, spans = self.hud_buttons()
-            self.text(line, self.HUD_ROW, ink, halo, x=spans[0][1])
-            self.draw_dash_meter(ink, halo)
+            self.text(self.HUD_LINE, self.HUD_ROW, ink, halo,
+                      x=self.HUD_SPANS[0][1])
+            # Handed the line it has already built: the meter is drawn to the
+            # width of the score above it, so both used to format it.
+            self.draw_dash_meter(score, ink, halo)
             if self.paused:
                 self.text("PAUSED", 34, ink, halo, 2)
                 self.text("P  RESUME", 52, ink, halo)
@@ -1028,7 +1033,7 @@ class Game:
             x = span - (self.tick * (7 + i * 2) + i * 61) % span
             self.canvas.fill(ink, (x, y, DASH_STREAK_LEN, 1))
 
-    def draw_dash_meter(self, ink, halo) -> None:
+    def draw_dash_meter(self, score_line: str, ink, halo) -> None:
         """Either how much dash is left, or how much is owed before the next one.
 
         One gauge for both, because they are the same question asked from either
@@ -1062,7 +1067,7 @@ class Game:
         # things of unrelated length. The floor is for a first-ever run, where
         # there is no high score yet and the line is only four digits wide.
         span = max(self.DASH_METER_MIN,
-                   self.HUD_MARGIN + pixelfont.text_width(self.score_line()) - x)
+                   self.HUD_MARGIN + pixelfont.text_width(score_line) - x)
         self.canvas.fill(halo, (x, y + 1, span, 2))
         self.canvas.fill(ink, (x, y, span, 1))
         width = round(span * max(0.0, min(1.0, filled)))

@@ -216,7 +216,7 @@ def test_only_the_left_button_works_the_menus(game):
 
 def hud_button(game, action):
     """The centre of one of the HUD hotkey buttons, in canvas pixels."""
-    for name, left, width in game.hud_buttons()[1]:
+    for name, left, width in game.HUD_SPANS:
         if name == action:
             return left + width / 2, game.HUD_ROW + 2
     raise AssertionError(f"no {action} button")
@@ -245,7 +245,7 @@ def test_every_hotkey_on_the_hud_is_pressable(game, action):
 
 
 def test_the_hud_buttons_do_not_overlap_or_leave_the_canvas(game):
-    spans = game.hud_buttons()[1]
+    spans = game.HUD_SPANS
     for (_, left, width), (_, next_left, _) in zip(spans, spans[1:]):
         assert left + width < next_left, "two buttons share pixels"
     action, left, width = spans[-1]

@@ -112,3 +112,43 @@ def draw(surface, text: str, x: int, y: int, color, scale: int = 1) -> None:
     color = tuple(color)
     for i, char in enumerate(text.upper()):
         surface.blit(_glyph(char, color, scale), (x + i * ADVANCE * scale, y))
+
+
+# One canvas pixel, at every scale: the shadow is there to separate glyphs from
+# whatever they overlap, not to grow with the lettering.
+SHADOW_OFFSET = 1
+
+_shadowed: dict[tuple[str, tuple, tuple, int], pygame.Surface] = {}
+
+
+def _shadowed_glyph(char: str, ink, halo, scale: int) -> pygame.Surface:
+    """One glyph with its own drop shadow already underneath it.
+
+    The shadow used to be a second pass over the whole string, which is two
+    blits per character for every line on screen. Baking the pair into one
+    surface draws the identical picture for half of them: a glyph cell is
+    ADVANCE wide and the glyph itself only GLYPH_W, so a one-pixel shadow still
+    ends inside its own cell at any scale and can never reach the next glyph,
+    which is what made the per-string ordering unobservable in the first place.
+    """
+    key = (char, ink, halo, scale)
+    surface = _shadowed.get(key)
+    if surface is None:
+        surface = pygame.Surface(
+            (GLYPH_W * scale + SHADOW_OFFSET, GLYPH_H * scale + SHADOW_OFFSET),
+            pygame.SRCALPHA,
+        )
+        surface.blit(_glyph(char, halo, scale), (SHADOW_OFFSET, SHADOW_OFFSET))
+        surface.blit(_glyph(char, ink, scale), (0, 0))
+        _shadowed[key] = surface
+    return surface
+
+
+def draw_shadowed(surface, text: str, x: int, y: int, ink, halo,
+                  scale: int = 1) -> None:
+    """Draw uppercase text at (x, y) with a one-pixel shadow behind it."""
+    ink = tuple(ink)
+    halo = tuple(halo)
+    for i, char in enumerate(text.upper()):
+        surface.blit(_shadowed_glyph(char, ink, halo, scale),
+                     (x + i * ADVANCE * scale, y))

@@ -153,8 +153,21 @@ SCENES = (DESERT, SNOW)
 DEFAULT = DESERT
 
 
+# Everything a frame asks for is a pure function of (scene, step), and a step
+# lasts hundreds of frames, so each answer is worked out once and looked up after
+# that. Blending a palette rebuilds a fourteen-field record every time, and the
+# frame used to ask for two of them -- once for the world and again, inside
+# text_tones, for the sky it reads the brightness of.
+_palettes: dict[tuple[str, int], Palette] = {}
+_tones: dict[tuple[str, int], tuple] = {}
+_sheets: dict[tuple[str, int], sprites.WorldSheet] = {}
+
+
 def palette_for_step(scene: Scene, step: int) -> Palette:
-    return blend(scene.day, scene.night, step)
+    key = (scene.key, step)
+    if key not in _palettes:
+        _palettes[key] = blend(scene.day, scene.night, step)
+    return _palettes[key]
 
 
 def text_tones(scene: Scene, step: int) -> tuple:
@@ -165,12 +178,13 @@ def text_tones(scene: Scene, step: int) -> tuple:
     contrast bottomed out at 18 of 255, which is invisible. The shadow separates
     the glyphs from whatever else they overlap.
     """
-    if luminance(palette_for_step(scene, step).sky) > 128.0:
-        return scene.day.text, scene.night.text
-    return scene.night.text, scene.day.text
-
-
-_sheets: dict[tuple[str, int], sprites.WorldSheet] = {}
+    key = (scene.key, step)
+    if key not in _tones:
+        if luminance(palette_for_step(scene, step).sky) > 128.0:
+            _tones[key] = (scene.day.text, scene.night.text)
+        else:
+            _tones[key] = (scene.night.text, scene.day.text)
+    return _tones[key]
 
 
 def sheet_for(scene: Scene, step: int) -> sprites.WorldSheet:

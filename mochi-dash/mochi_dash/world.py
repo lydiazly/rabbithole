@@ -145,10 +145,9 @@ def low_flyer_share(speed: float) -> float:
 def gap_range(speed: float) -> tuple[float, float]:
     """Seconds of travel to leave before the next spawn, at this speed."""
     t = difficulty(speed)
-    return tuple(
-        early + (late - early) * t
-        for early, late in zip(GAP_RANGE_EARLY, GAP_RANGE_LATE, strict=True)
-    )
+    (early_lo, early_hi), (late_lo, late_hi) = GAP_RANGE_EARLY, GAP_RANGE_LATE
+    return (early_lo + (late_lo - early_lo) * t,
+            early_hi + (late_hi - early_hi) * t)
 
 
 def ground_weights(speed: float) -> tuple[float, float, float]:
