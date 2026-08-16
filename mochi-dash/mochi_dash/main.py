@@ -756,7 +756,7 @@ class Game:
                 self.puffs.burst(self.player.x, self.player.y, False)
 
         self.tick += 1
-        self.award(self.world.update(dt, self.player.x))
+        self.award(*self.world.update(dt, self.player.x))
         impact = self.player.update(dt, holding_jump, ducking, lateral, X_MIN, X_MAX)
         if impact:
             self.puffs.burst(self.player.x, world.GROUND_Y, impact >= HARD_LANDING)
@@ -777,7 +777,8 @@ class Game:
                 return
             for ob in struck:
                 if not ob.scored:
-                    self.award(world.points_for(ob))
+                    self.award(world.own_points(ob),
+                               world.score_bonus(self.world.speed))
                 self.world.launch(ob)
                 # At the obstacle, not on the ground under it. A smashed flyer
                 # used to puff at floor level, a body-length below where it was
@@ -813,9 +814,29 @@ class Game:
             if self.toward_dash >= self.dash_target and self.dash_cooldown <= 0.0:
                 self.start_dash()
 
-    def award(self, cleared: int) -> None:
-        self.score += cleared
-        self.toward_dash += cleared
+    def award(self, asked: int, bonus: int = 0) -> None:
+        """Score both halves. Only what the obstacles asked buys the next dash.
+
+        The bonus is the run paying more for the same cactus once it is fast
+        enough to make it hard, so letting it into the meter would speed the
+        dashes up as well: measured over three minutes it took the gap between
+        them from 37 seconds to 25, turning a reward into the late game's
+        ordinary weather. The meter counts obstacles, and there are no more of
+        them than there were.
+
+        Neither half counts while a dash is running, nor through the breather
+        that follows it. Points taken with nothing able to kill you are not
+        progress towards being invincible again, and the meter said otherwise in
+        the one place it is actually being watched: it sat under the countdown
+        visibly filling, which reads as the reward for a dash being the next
+        dash. Both halves of that pause matter -- stopping at the end of the
+        dash alone would leave it climbing through the three seconds the breather
+        exists to make empty, off obstacles spawned before the hush that are
+        still crossing the screen.
+        """
+        self.score += asked + bonus
+        if not self.dashing and self.recovery <= 0.0:
+            self.toward_dash += asked
 
     # -- drawing ----------------------------------------------------------
 

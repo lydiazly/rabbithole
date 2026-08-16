@@ -49,13 +49,20 @@ GAP_RANGE_LATE = (0.68, 1.15)
 # out from where its box sits rather than from its kind, so a new obstacle scores
 # correctly the day it is added.
 #
-#   nothing            -- clears a runner untouched, so it is scenery:  0
+#   nothing            -- clears a runner untouched, so it is only ever a
+#                         mistimed jump's problem:                      1
 #   a duck             -- would hit standing but not crouched:          2
 #   a jump             -- in the way either way, and taller is harder:  1 upward
 #
 # A cluster is several obstacles and so already scores several times.
+#
+# The first of those used to pay nothing, on the grounds that it asks nothing.
+# It still asks nothing, but it is on the screen and it does go past, and a
+# thing that goes by while the counter sits still reads as the counter being
+# broken rather than as the flyer being harmless.
 SCORE_HEIGHT_STEP = 5
 DUCK_POINTS = 2
+HARMLESS_POINTS = 1
 
 
 def _player_top(pose: str) -> float:
@@ -74,11 +81,17 @@ def blocks_a_runner(ob) -> bool:
     return ob.y < GROUND_Y and ob.y + ob.h > _player_top("round")
 
 
-def points_for(ob) -> int:
+# What clearing an obstacle is worth is two separable things, and they are never
+# added up in here, because they are spent differently: what the obstacle asked
+# of you, which is a property of where its box sits, and what the run has got to,
+# which is the same for everything on the screen at once. The score takes both;
+# the dash meter takes only the first. See score_bonus and Game.award.
+def own_points(ob) -> int:
+    """What the obstacle itself asks of you, before the run's own bonus."""
     if not blocks_a_runner(ob):
         # A high flyer still punishes a badly timed jump, but it asks nothing of
-        # anyone on the ground, so it earns nothing either.
-        return 0
+        # anyone on the ground, so it pays the floor rather than its own way.
+        return HARMLESS_POINTS
     if demands_duck(ob):
         return DUCK_POINTS
     return 1 + max(0, int((ob.h - SMALL_BOX[1]) // SCORE_HEIGHT_STEP))
@@ -158,6 +171,26 @@ def ground_weights(speed: float) -> tuple[float, float, float]:
         unlocked(t, LARGE_FROM, LARGE_WEIGHT),
         unlocked(t, CLUSTER_FROM, CLUSTER_WEIGHT),
     )
+
+
+# The same cactus is worth more once the run is fast enough to make it hard. A
+# flat step added to every score rather than a multiplier: what has changed is
+# the speed you are meeting it at, and that is the same for the cheapest
+# obstacle as for the dearest, so the cheapest must not gain the least.
+#
+# The steps land where the traffic actually thickens -- the difficulties that
+# unlock clusters and then triples -- rather than at two numbers of their own,
+# which would drift away from them the first time either is retuned. So the
+# score goes up at the two moments the run visibly gets harder, and it goes up
+# because of them.
+SCORE_BONUS_AT = (CLUSTER_FROM, TRIPLE_FROM)
+
+
+def score_bonus(speed: float) -> int:
+    """What every obstacle is worth on top of its own value, at this speed."""
+    t = difficulty(speed)
+    return sum(1 for start in SCORE_BONUS_AT if t >= start)
+
 
 # Bottom edge above the ground. Low clears a ducked player (6 tall) and catches a
 # standing one (12); high is only a threat mid-jump.
@@ -310,14 +343,18 @@ class World:
 
     # -- update -----------------------------------------------------------
 
-    def update(self, dt: float, player_x: float) -> int:
-        """Advance the world. Returns the points scored this step."""
+    def update(self, dt: float, player_x: float) -> tuple[int, int]:
+        """Advance the world. Returns (what the obstacles asked, the run's bonus).
+
+        Two numbers rather than their sum because the caller spends them
+        differently -- see Game.award.
+        """
         self.speed = min(SPEED_MAX, self.speed + SPEED_GAIN * dt)
         scroll = self.scroll
         step = scroll * dt
         self.distance += step
 
-        cleared = 0
+        asked = bonus = 0
         for ob in self.obstacles:
             ob.phase += dt
             if ob.launched:
@@ -330,7 +367,8 @@ class World:
             ob.x -= step
             if not ob.scored and ob.x + ob.w < player_x:
                 ob.scored = True
-                cleared += points_for(ob)
+                asked += own_points(ob)
+                bonus += score_bonus(self.speed)
         self.obstacles = [
             ob for ob in self.obstacles
             if ob.x + ob.w > -16.0 and ob.x < WIDTH + 20
@@ -356,7 +394,7 @@ class World:
         self._scroll_layer(self.far, FAR_SPEED, dt, 42.0)
         self._scroll_layer(self.near, NEAR_SPEED, dt, 36.0)
         self._scroll_layer(self.speckles, 1.0, dt, 6.0)
-        return cleared
+        return asked, bonus
 
     def _pick_gap(self, scroll: float) -> None:
         """Distance to leave before the next spawn.

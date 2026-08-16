@@ -842,6 +842,46 @@ def test_the_dash_cannot_pay_for_itself():
     assert main.DASH_COOLDOWN > main.DASH_SECONDS, "no ordinary running between"
 
 
+def test_the_meter_does_not_fill_while_you_are_invincible():
+    """Points count for score throughout, but not towards the next dash.
+
+    Not during the dash, and not through the breather after it either -- the
+    countdown is where the meter is actually being looked at, and it sat there
+    visibly filling off obstacles spawned before the hush that were still
+    crossing the screen.
+    """
+    import pygame
+    pygame.init()
+    pygame.display.set_mode((1, 1))
+
+    game = main.Game()
+    game.start_run()
+    game.world.speed = wd.SPEED_MAX
+    ob = wd.Obstacle(0.0, wd.GROUND_Y - wd.SMALL_BOX[1], *wd.SMALL_BOX, "small")
+    asked, bonus = wd.own_points(ob), wd.score_bonus(game.world.speed)
+    assert asked > 0 and bonus > 0, "the experiment needs both halves to be real"
+    game.start_dash()
+
+    def clear_one():
+        before = game.score, game.toward_dash
+        game.award(asked, bonus)
+        return game.score - before[0], game.toward_dash - before[1]
+
+    scored, towards = clear_one()
+    assert scored == asked + bonus, "a smashed obstacle still counts for score"
+    assert towards == 0, "and not towards the next dash"
+
+    game.end_dash()
+    assert game.recovery > 0.0, "the breather is what the countdown runs over"
+    assert clear_one() == (asked + bonus, 0), "nor during the countdown"
+
+    game.recovery = 0.0  # the countdown has run out; ordinary running resumes
+    assert clear_one() == (asked + bonus, asked), (
+        "afterwards the meter counts the obstacle again -- but never the bonus, "
+        "which would make the run's own difficulty buy the dashes"
+    )
+
+
 def test_a_dash_never_expires_into_the_obstacle_it_is_touching():
     """The frame an obstacle reaches the player is the frame it stops blocking.
 

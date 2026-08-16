@@ -47,14 +47,19 @@ of buttons, so pause, retry and the menu are reachable without a keyboard.
 It opens easy — nothing but single cacti while you find the jump — and adds
 taller ones, clusters and flyers as it speeds up, spacing them tighter as it
 goes. Scoring pays for what an obstacle asked of you: a point for a cactus and
-two for a tall one, two for a flyer low enough to duck, nothing at all for one
-that sails past overhead.
+two for a tall one, two for a flyer low enough to duck, one for a high one you
+never had to react to. Everything is worth a point more once the run is fast
+enough to be sending clusters at you, and another point once it starts sending
+threes — on the score only, so a harder run pays better without also handing out
+dashes faster.
 
 Points earn a **dash**: a few seconds of running much faster and flattening
 whatever is in the way instead of dying to it. It warns you before it goes, thins
 the traffic out as it does, then leaves the screen empty for three seconds,
-counting down, so you can find your footing again. Each one costs more than the
-last, so they stay a reward rather than a rhythm.
+counting down, so you can find your footing again. What you smash on the way
+counts for score, but not towards the next one — nothing taken while you cannot
+die buys being invincible again. Each dash costs more than the last, so they stay
+a reward rather than a rhythm.
 
 Your best run is saved, to `%APPDATA%\Mochi Dash` on Windows,
 `~/Library/Application Support/Mochi Dash` on macOS and

@@ -307,10 +307,42 @@ def test_points_pay_for_what_an_obstacle_demands():
     low = in_air(wd.AIR_LOW_CLEAR)
     high = in_air(wd.AIR_HIGH_CLEAR)
 
-    assert wd.points_for(small) == 1
-    assert wd.points_for(large) > wd.points_for(small), "taller asks more"
-    assert wd.points_for(low) == wd.DUCK_POINTS
-    assert wd.points_for(high) == 0, "asks nothing of a runner, so pays nothing"
+    assert wd.own_points(small) == 1
+    assert wd.own_points(large) > wd.own_points(small), "taller asks more"
+    assert wd.own_points(low) == wd.DUCK_POINTS
+    assert wd.own_points(high) == wd.HARMLESS_POINTS
+    assert wd.own_points(low) > wd.own_points(high), (
+        "the flyer you have to duck must pay more than the one you can ignore"
+    )
+
+
+def test_the_score_steps_up_where_the_traffic_thickens():
+    """The bonus is the run's, not the obstacle's: one step, the same for all."""
+    speeds = [wd.SPEED_START + wd.SPEED_RANGE * t for t in (0.0, 0.5, 1.0)]
+    assert [wd.score_bonus(s) for s in speeds] == [0, 1, 2]
+
+    # A step, not a ramp: it moves only when a difficulty threshold is passed.
+    below = wd.SPEED_START + wd.SPEED_RANGE * (wd.CLUSTER_FROM - 0.01)
+    at = wd.SPEED_START + wd.SPEED_RANGE * wd.CLUSTER_FROM
+    assert wd.score_bonus(below) == 0
+    assert wd.score_bonus(at) == 1
+
+    # And what an obstacle asks does not move with it -- that is the half the
+    # dash meter counts, and it has to stay a count of obstacles.
+    for ob in (on_ground(wd.SMALL_BOX), on_ground(wd.LARGE_BOX, "large"),
+               in_air(wd.AIR_LOW_CLEAR), in_air(wd.AIR_HIGH_CLEAR)):
+        assert len({wd.own_points(ob) for _ in speeds}) == 1, ob.kind
+
+
+def test_the_world_hands_back_the_two_halves_unmixed():
+    """The caller spends them differently, so it must be given them apart."""
+    w = wd.World(scenes.DEFAULT, random.Random(7))
+    w.speed = wd.SPEED_MAX                       # both bonus steps earned
+    ob = wd.Obstacle(PLAYER_X - 8, wd.GROUND_Y - 11, *wd.SMALL_BOX, "small")
+    w.obstacles = [ob]
+    asked, bonus = w.update(DT, PLAYER_X)
+    assert asked == wd.own_points(ob)
+    assert bonus == wd.score_bonus(wd.SPEED_MAX) > 0
 
 
 def test_the_duck_test_is_the_hitbox_and_not_a_constant():
@@ -335,12 +367,12 @@ def test_an_obstacle_scores_once_however_the_player_moves():
     w = wd.World(scenes.DEFAULT, random.Random(3))
     ob = wd.Obstacle(PLAYER_X - 8, wd.GROUND_Y - 11, *wd.SMALL_BOX, "small")
     w.obstacles = [ob]
-    expected = wd.points_for(ob)
-    first = w.update(DT, PLAYER_X)
+    expected = wd.own_points(ob) + wd.score_bonus(w.speed)
+    first = sum(w.update(DT, PLAYER_X))
     assert first == expected, (first, expected)
     total = first
     for _ in range(30):
-        total += w.update(DT, PLAYER_X - 40)  # shuffle back over it
+        total += sum(w.update(DT, PLAYER_X - 40))  # shuffle back over it
     assert total == expected, "scored more than once"
 
 
